@@ -1,0 +1,25 @@
+# Copyright 2026 Cetmix Nordic Ltd
+# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+{
+    "name": "AI Connection Discuss Bot",
+    "summary": "Chat with an AI Connection (e.g. Claude via LiteLLM) in Discuss "
+    "and record chatter",
+    "version": "18.0.1.1.0",
+    "license": "AGPL-3",
+    "author": "Cetmix Nordic Ltd",
+    "category": "Productivity/Discuss",
+    "depends": [
+        "mail",
+        "ai_tool",
+        "ai_connection_openai",
+    ],
+    "data": [
+        "security/ir.model.access.csv",
+        "data/ai_tool_data.xml",
+        "data/res_users_data.xml",
+        "data/ir_cron_data.xml",
+        "views/res_users_views.xml",
+        "views/ai_discuss_bot_request_views.xml",
+    ],
+    "installable": True,
+}

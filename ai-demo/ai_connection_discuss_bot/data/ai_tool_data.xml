@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <!-- Read-only tools. They always run with the rights of the user who
+         asked the question (see ai.discuss.bot.tools). -->
+    <record id="ai_tool_find_models" model="ai.tool">
+        <field name="name">find_models</field>
+        <field name="description">Find Odoo models (technical names) by words in their name, e.g. 'sales order' -> sale.order. Only models the user may read are returned.</field>
+        <field name="model_id" ref="model_ai_discuss_bot_tools" />
+        <field name="function_name">_ai_bot_find_models</field>
+        <field name="kind">generic</field>
+    </record>
+    <record id="ai_tool_get_model_fields" model="ai.tool">
+        <field name="name">get_model_fields</field>
+        <field name="description">List the fields of an Odoo model: technical name, label, type, related model and selection values. Use it before writing a domain or choosing fields.</field>
+        <field name="model_id" ref="model_ai_discuss_bot_tools" />
+        <field name="function_name">_ai_bot_get_model_fields</field>
+        <field name="kind">generic</field>
+    </record>
+    <record id="ai_tool_search_records" model="ai.tool">
+        <field name="name">search_records</field>
+        <field name="description">Search records of an Odoo model with a domain and return their field values and the total number of matches. Read-only.</field>
+        <field name="model_id" ref="model_ai_discuss_bot_tools" />
+        <field name="function_name">_ai_bot_search_records</field>
+        <field name="kind">generic</field>
+    </record>
+    <record id="ai_tool_aggregate_records" model="ai.tool">
+        <field name="name">aggregate_records</field>
+        <field name="description">Count or sum records of an Odoo model, optionally grouped (e.g. sales per customer per month). Use it for totals instead of adding up search results.</field>
+        <field name="model_id" ref="model_ai_discuss_bot_tools" />
+        <field name="function_name">_ai_bot_aggregate_records</field>
+        <field name="kind">generic</field>
+    </record>
+    <record id="ai_tool_get_current_record" model="ai.tool">
+        <field name="name">get_current_record</field>
+        <field name="description">Read the fields of the record whose chatter this conversation is in (e.g. the customer or sales order where the user mentioned you).</field>
+        <field name="model_id" ref="model_ai_discuss_bot_tools" />
+        <field name="function_name">_ai_bot_get_current_record</field>
+        <field name="kind">generic_model</field>
+    </record>
+</odoo>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <record id="view_users_form_ai_bot" model="ir.ui.view">
+        <field name="name">res.users.form.ai.bot</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page name="ai_bot" string="AI Bot" groups="base.group_system">
+                    <group>
+                        <field name="ai_bot_connection_id" />
+                        <field name="ai_bot_tool_ids" widget="many2many_tags" />
+                        <field name="ai_bot_history_limit" />
+                        <field
+                            name="ai_bot_instructions"
+                            placeholder="e.g. Answer as the support team of Example Oy. Never promise delivery dates."
+                        />
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

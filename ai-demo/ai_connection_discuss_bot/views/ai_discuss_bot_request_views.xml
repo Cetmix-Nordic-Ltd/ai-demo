@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <record id="ai_discuss_bot_request_list_view" model="ir.ui.view">
+        <field name="model">ai.discuss.bot.request</field>
+        <field name="arch" type="xml">
+            <list create="0" decoration-danger="state == 'error'" decoration-muted="state == 'pending'">
+                <field name="create_date" string="Asked on" />
+                <field name="bot_user_id" />
+                <field name="author_id" />
+                <field name="res_model" />
+                <field name="res_id" />
+                <field name="prompt_tokens" optional="show" />
+                <field name="completion_tokens" optional="show" />
+                <field name="iterations" optional="hide" />
+                <field name="state" widget="badge" />
+            </list>
+        </field>
+    </record>
+
+    <record id="ai_discuss_bot_request_form_view" model="ir.ui.view">
+        <field name="model">ai.discuss.bot.request</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0">
+                <header>
+                    <field name="state" widget="statusbar" />
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="bot_user_id" />
+                            <field name="author_id" />
+                            <field name="asker_user_id" />
+                            <field name="message_id" />
+                        </group>
+                        <group>
+                            <field name="res_model" />
+                            <field name="res_id" />
+                            <field name="prompt_tokens" />
+                            <field name="completion_tokens" />
+                            <field name="iterations" />
+                        </group>
+                    </group>
+                    <group string="Error" invisible="not error">
+                        <field name="error" nolabel="1" colspan="2" />
+                    </group>
+                    <group string="Answer">
+                        <field name="response" nolabel="1" colspan="2" />
+                    </group>
+                    <group string="Tool calls" invisible="not tool_log">
+                        <field name="tool_log" nolabel="1" colspan="2" />
+                    </group>
+                    <group string="Sent to the AI">
+                        <field name="messages_json" nolabel="1" colspan="2" />
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="ai_discuss_bot_request_search_view" model="ir.ui.view">
+        <field name="model">ai.discuss.bot.request</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="bot_user_id" />
+                <field name="author_id" />
+                <field name="res_model" />
+                <filter name="errors" string="Errors" domain="[('state', '=', 'error')]" />
+                <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]" />
+                <group expand="0" string="Group By">
+                    <filter name="group_bot" string="Bot" context="{'group_by': 'bot_user_id'}" />
+                    <filter name="group_state" string="State" context="{'group_by': 'state'}" />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="ai_discuss_bot_request_action" model="ir.actions.act_window">
+        <field name="name">AI Bot Requests</field>
+        <field name="res_model">ai.discuss.bot.request</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem
+        id="ai_discuss_bot_request_menu"
+        name="AI Bot Requests"
+        parent="ai_tool.ai_menu_root"
+        action="ai_discuss_bot_request_action"
+        groups="base.group_system"
+        sequence="20"
+    />
+</odoo>
