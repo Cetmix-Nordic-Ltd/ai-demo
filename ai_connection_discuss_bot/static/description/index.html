@@ -530,6 +530,20 @@ given to a bot.</p>
 <p>Privacy: the conversation, attachments and the data the tools read are
 sent to the AI provider of the connection. Make sure this is agreed
 before using the bot in production, or use a local model.</p>
+<p>Troubleshooting:</p>
+<ul class="simple">
+<li><strong>Requests stay Pending and the AI gateway sees nothing</strong>: the
+scheduled action <em>AI Discuss Bot: answer questions</em> does not run in
+this database. If <em>Run Manually</em> on the scheduled action answers,
+check <em>Apps</em> (remove the <em>Apps</em> filter, group by <em>Status</em>): Odoo runs
+no scheduled actions in a database where a module is <em>To Install</em>,
+<em>To Upgrade</em> or <em>To Remove</em>. Finish or cancel that change. Also check
+that the scheduled action is active and that the Odoo server runs
+scheduled actions for this database (<tt class="docutils literal">db_name</tt>,
+<tt class="docutils literal">max_cron_threads</tt>).</li>
+<li><strong>A request is in Error</strong>: the error is shown on the request, for
+example a missing <em>AI Bot Connection</em> or a wrong URL or key.</li>
+</ul>
 </div>
 <div class="section" id="known-issues-roadmap">
 <h1><a class="toc-backref" href="#toc-entry-4">Known issues / Roadmap</a></h1>
