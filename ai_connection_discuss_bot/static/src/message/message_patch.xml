@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<templates xml:space="preserve">
+    <t t-inherit="mail.Message" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o-mail-Message-richBody')]" position="after">
+            <div
+                t-if="aiBot.actions.length"
+                class="o_ai_bot_buttons mb-2 d-flex flex-column gap-1"
+            >
+                <div
+                    t-foreach="aiBot.actions"
+                    t-as="action"
+                    t-key="action.id"
+                    class="o_ai_bot_proposal border rounded p-2 bg-view"
+                >
+                    <div class="small" t-esc="action.name" />
+                    <div t-if="action.can_decide" class="mt-2">
+                        <button
+                            class="btn btn-sm btn-primary me-1 o_ai_bot_confirm"
+                            t-att-disabled="aiBot.busy"
+                            t-on-click="() => this.aiBotDecide(action, 'confirm')"
+                        >Confirm</button>
+                        <button
+                            class="btn btn-sm btn-secondary o_ai_bot_cancel"
+                            t-att-disabled="aiBot.busy"
+                            t-on-click="() => this.aiBotDecide(action, 'cancel')"
+                        >Cancel</button>
+                    </div>
+                    <div
+                        t-elif="action.state === 'proposed'"
+                        class="small text-muted mt-1"
+                    >
+                        Waiting for confirmation by <t t-esc="action.asker_name" />
+                    </div>
+                    <div
+                        t-else=""
+                        class="small mt-1 o_ai_bot_state"
+                        t-att-class="{
+                        'text-success': action.state === 'done',
+                        'text-danger': action.state === 'failed',
+                        'text-muted': action.state === 'cancelled' or action.state === 'expired',
+                        }"
+                    >
+                        <t t-esc="action.state_label" />
+                    </div>
+                </div>
+            </div>
+        </xpath>
+    </t>
+</templates>

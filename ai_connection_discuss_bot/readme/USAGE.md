@@ -7,10 +7,14 @@
 ![Answer in the chatter of a record](../static/description/img/record_chatter.png)
 
 - **Changes**: ask for example `@Claude remind Maija to call this
-  customer on Friday`. The answer ends with a *Review and confirm* link;
-  open it and press *Confirm* or *Cancel*. Opening the link changes
-  nothing, a chat reply such as "yes" does not confirm, and a proposal
-  expires after 24 hours.
+  customer on Friday`. The answer shows the proposal with *Confirm* and
+  *Cancel* buttons; only the person who asked sees the buttons, others
+  see the state. A chat reply such as "yes" does not confirm, and a
+  proposal expires after 24 hours.
+
+E-mail notifications and other clients get a *Review and confirm* link
+instead, which opens a review page with the same buttons. Opening the
+link changes nothing.
 
 ![Review page of a proposal](../static/description/img/review_page.png)
 

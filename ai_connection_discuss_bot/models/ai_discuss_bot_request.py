@@ -577,6 +577,8 @@ class AiDiscussBotRequest(models.Model):
                 subtype_xmlid="mail.mt_note",
                 partner_ids=self.author_id.ids,
             )
+        if pending:
+            pending.message_id = message
         return message
 
     def _actions_html(self, actions):

@@ -5,8 +5,11 @@ import re
 from datetime import timedelta
 from unittest.mock import patch
 
+from requests import HTTPError
+
 from odoo import fields
 from odoo.tests import HttpCase, new_test_user, tagged
+from odoo.tests.common import JsonRpcException
 
 from odoo.addons.base.tests.common import DISABLED_MAIL_CONTEXT
 
@@ -208,3 +211,94 @@ class TestProposals(HttpCase):
         self.assertEqual(response.status_code, 200)
         action.invalidate_recordset(["state"])
         self.assertEqual(action.state, "done", action.error)
+
+    def test_discuss_buttons(self):
+        """The bot's answer carries the proposals; only the asker decides."""
+        request = self._ask_on_customer(
+            [
+                tool_call_step("propose_note", {"body": "Napista"}),
+                answer_step("Ehdotin."),
+            ]
+        )
+        action = request.action_ids
+        reply = self._bot_messages().filtered(lambda m: "o_ai_bot_actions" in m.body)
+        self.assertEqual(action.message_id, reply)
+
+        self.authenticate("prop_colleague", "prop_colleague_pw_1")
+        seen = self.make_jsonrpc_request(
+            "/ai_discuss_bot/message_actions", {"message_id": reply.id}
+        )
+        self.assertEqual(seen[0]["id"], action.id)
+        self.assertFalse(seen[0]["can_decide"])
+        # Odoo's assertRaises takes one exception class only
+        refused = False
+        try:
+            self.make_jsonrpc_request(
+                "/ai_discuss_bot/action/decide_inline",
+                {"action_id": action.id, "decision": "confirm"},
+            )
+        except (JsonRpcException, HTTPError):
+            refused = True
+        self.assertTrue(refused)
+        self.assertEqual(action.state, "proposed")
+
+        self.authenticate("prop_tester", "prop_tester_pw_1")
+        mine = self.make_jsonrpc_request(
+            "/ai_discuss_bot/message_actions", {"message_id": reply.id}
+        )
+        self.assertTrue(mine[0]["can_decide"])
+        result = self.make_jsonrpc_request(
+            "/ai_discuss_bot/action/decide_inline",
+            {"action_id": action.id, "decision": "cancel"},
+        )
+        self.assertEqual(result["state"], "cancelled")
+        self.assertFalse(result["can_decide"])
+        action.invalidate_recordset(["state"])
+        self.assertEqual(action.state, "cancelled")
+
+    def test_discuss_buttons_tour(self):
+        """Confirm a proposal with the button in Discuss."""
+        chat = (
+            self.env["discuss.channel"]
+            .with_user(self.user)
+            .channel_get([self.bot.partner_id.id])
+        )
+        chat.with_user(self.user).with_context(ai_discuss_bot_skip=True).message_post(
+            body="Remind me to call the customer", message_type="comment"
+        )
+        request = self.env["ai.discuss.bot.request"].create(
+            {
+                "bot_user_id": self.bot.id,
+                "author_id": self.user.partner_id.id,
+                "asker_user_id": self.user.id,
+                "res_model": "discuss.channel",
+                "res_id": chat.id,
+                "state": "done",
+                "messages_json": "[]",
+            }
+        )
+        action = self.env["ai.discuss.bot.action"]._propose(
+            request,
+            "activity",
+            self.customer,
+            {
+                "summary": "Call the customer",
+                "note": "",
+                "date_deadline": "2030-01-15",
+                "user_id": self.user.id,
+                "activity_type_id": self.env.ref("mail.mail_activity_data_call").id,
+            },
+            "Call: 'Call the customer' on Ehdotus Oy",
+            "",
+        )
+        request._post_reply(chat, "I proposed a call.", action)
+        # start_tour logs in with the login as password
+        self.user.password = "prop_tester"
+        self.start_tour(
+            f"/odoo/discuss?active_id=discuss.channel_{chat.id}",
+            "ai_discuss_bot_confirm_tour",
+            login="prop_tester",
+        )
+        action.invalidate_recordset(["state"])
+        self.assertEqual(action.state, "done", action.error)
+        self.assertEqual(self.customer.activity_ids.summary, "Call the customer")

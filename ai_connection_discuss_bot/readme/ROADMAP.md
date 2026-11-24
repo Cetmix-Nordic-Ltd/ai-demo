@@ -1,5 +1,3 @@
-- The confirmation of proposals opens a separate page; buttons inside
-  Discuss would need an extension of the Discuss message component.
 - Two proposal types exist (activity, note); further types could create
   for example project tasks or quotation drafts.
 - `ai_connection` does not add the result of a tool that raises an

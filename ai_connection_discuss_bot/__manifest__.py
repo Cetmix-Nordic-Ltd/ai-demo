@@ -28,6 +28,14 @@
         "demo/ai_discuss_bot_request_demo.xml",
         "demo/ai_discuss_bot_action_demo.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "ai_connection_discuss_bot/static/src/**/*",
+        ],
+        "web.assets_tests": [
+            "ai_connection_discuss_bot/static/tests/tours/**/*",
+        ],
+    },
     "images": ["static/description/img/discuss_chat.png"],
     "installable": True,
 }
