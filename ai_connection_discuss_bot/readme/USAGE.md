@@ -34,3 +34,16 @@ given to a bot.
 Privacy: the conversation, attachments and the data the tools read are
 sent to the AI provider of the connection. Make sure this is agreed
 before using the bot in production, or use a local model.
+
+Troubleshooting:
+
+- **Requests stay Pending and the AI gateway sees nothing**: the
+  scheduled action *AI Discuss Bot: answer questions* does not run in
+  this database. If *Run Manually* on the scheduled action answers,
+  check *Apps* (remove the *Apps* filter, group by *Status*): Odoo runs
+  no scheduled actions in a database where a module is *To Install*,
+  *To Upgrade* or *To Remove*. Finish or cancel that change. Also check
+  that the scheduled action is active and that the Odoo server runs
+  scheduled actions for this database (`db_name`, `max_cron_threads`).
+- **A request is in Error**: the error is shown on the request, for
+  example a missing *AI Bot Connection* or a wrong URL or key.
