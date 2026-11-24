@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <!-- Answered question in a customer's chatter, without tools -->
+    <record id="ai_discuss_bot_request_done_demo" model="ai.discuss.bot.request">
+        <field name="bot_user_id" ref="res_users_ai_bot_claude" />
+        <field name="author_id" ref="base.partner_demo" />
+        <field name="asker_user_id" ref="base.user_demo" />
+        <field name="res_model">res.partner</field>
+        <field name="res_id" ref="base.res_partner_1" />
+        <field name="state">done</field>
+        <field
+            name="messages_json"
+        >[{"role": "system", "content": "You are Claude, an AI assistant inside the Odoo ERP."}, {"role": "user", "content": "Marc Demo: @Claude summarise the latest e-mails of this customer"}]</field>
+        <field
+            name="response"
+        >The customer asked for the **delivery date** of their last order and for a quotation for spare parts.</field>
+        <field name="prompt_tokens">812</field>
+        <field name="completion_tokens">46</field>
+        <field name="iterations">1</field>
+        <field name="attempts">1</field>
+    </record>
+
+    <!-- Question answered with tools, which led to a proposal -->
+    <record id="ai_discuss_bot_request_tools_demo" model="ai.discuss.bot.request">
+        <field name="bot_user_id" ref="res_users_ai_bot_claude" />
+        <field name="author_id" ref="base.partner_demo" />
+        <field name="asker_user_id" ref="base.user_demo" />
+        <field name="res_model">res.partner</field>
+        <field name="res_id" ref="base.res_partner_2" />
+        <field name="state">done</field>
+        <field
+            name="messages_json"
+        >[{"role": "system", "content": "You are Claude, an AI assistant inside the Odoo ERP."}, {"role": "user", "content": "Marc Demo: @Claude remind me to call this customer on Monday"}]</field>
+        <field
+            name="response"
+        >I proposed a **Call** activity for Monday. It waits for your confirmation.</field>
+        <field name="tool_log">get_current_record({}) -> ok
+propose_activity({"summary": "Call the customer", "activity_type": "Call"}) -> ok
+</field>
+        <field name="prompt_tokens">2410</field>
+        <field name="completion_tokens">131</field>
+        <field name="iterations">3</field>
+        <field name="attempts">1</field>
+    </record>
+
+    <!-- Failed question: the AI gateway could not be reached -->
+    <record id="ai_discuss_bot_request_error_demo" model="ai.discuss.bot.request">
+        <field name="bot_user_id" ref="res_users_ai_bot_claude" />
+        <field name="author_id" ref="base.partner_admin" />
+        <field name="asker_user_id" ref="base.user_admin" />
+        <field name="res_model">res.partner</field>
+        <field name="res_id" ref="base.res_partner_12" />
+        <field name="state">error</field>
+        <field
+            name="messages_json"
+        >[{"role": "system", "content": "You are Claude, an AI assistant inside the Odoo ERP."}, {"role": "user", "content": "Mitchell Admin: @Claude what is the credit limit of this customer?"}]</field>
+        <field name="error">Connection error: the AI gateway did not answer.</field>
+        <field name="attempts">1</field>
+    </record>
+</odoo>

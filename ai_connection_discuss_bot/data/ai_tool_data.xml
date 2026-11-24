@@ -6,37 +6,69 @@
          asked the question (see ai.discuss.bot.tools). -->
     <record id="ai_tool_find_models" model="ai.tool">
         <field name="name">find_models</field>
-        <field name="description">Find Odoo models (technical names) by words in their name, e.g. 'sales order' -> sale.order. Only models the user may read are returned.</field>
+        <field
+            name="description"
+        >Find Odoo models (technical names) by words in their name, e.g. 'sales order' -> sale.order. Only models the user may read are returned.</field>
         <field name="model_id" ref="model_ai_discuss_bot_tools" />
         <field name="function_name">_ai_bot_find_models</field>
         <field name="kind">generic</field>
     </record>
     <record id="ai_tool_get_model_fields" model="ai.tool">
         <field name="name">get_model_fields</field>
-        <field name="description">List the fields of an Odoo model: technical name, label, type, related model and selection values. Use it before writing a domain or choosing fields.</field>
+        <field
+            name="description"
+        >List the fields of an Odoo model: technical name, label, type, related model and selection values. Use it before writing a domain or choosing fields.</field>
         <field name="model_id" ref="model_ai_discuss_bot_tools" />
         <field name="function_name">_ai_bot_get_model_fields</field>
         <field name="kind">generic</field>
     </record>
     <record id="ai_tool_search_records" model="ai.tool">
         <field name="name">search_records</field>
-        <field name="description">Search records of an Odoo model with a domain and return their field values and the total number of matches. Read-only.</field>
+        <field
+            name="description"
+        >Search records of an Odoo model with a domain and return their field values and the total number of matches. Read-only.</field>
         <field name="model_id" ref="model_ai_discuss_bot_tools" />
         <field name="function_name">_ai_bot_search_records</field>
         <field name="kind">generic</field>
     </record>
     <record id="ai_tool_aggregate_records" model="ai.tool">
         <field name="name">aggregate_records</field>
-        <field name="description">Count or sum records of an Odoo model, optionally grouped (e.g. sales per customer per month). Use it for totals instead of adding up search results.</field>
+        <field
+            name="description"
+        >Count or sum records of an Odoo model, optionally grouped (e.g. sales per customer per month). Use it for totals instead of adding up search results.</field>
         <field name="model_id" ref="model_ai_discuss_bot_tools" />
         <field name="function_name">_ai_bot_aggregate_records</field>
         <field name="kind">generic</field>
     </record>
     <record id="ai_tool_get_current_record" model="ai.tool">
         <field name="name">get_current_record</field>
-        <field name="description">Read the fields of the record whose chatter this conversation is in (e.g. the customer or sales order where the user mentioned you).</field>
+        <field
+            name="description"
+        >Read the fields of the record whose chatter this conversation is in (e.g. the customer or sales order where the user mentioned you).</field>
         <field name="model_id" ref="model_ai_discuss_bot_tools" />
         <field name="function_name">_ai_bot_get_current_record</field>
+        <field name="kind">generic_model</field>
+    </record>
+
+    <!-- Proposal tools. They only store a proposal; the user who asked must
+         confirm it on the review page before anything is changed, and the
+         change is then made with that user's rights. -->
+    <record id="ai_tool_propose_activity" model="ai.tool">
+        <field name="name">propose_activity</field>
+        <field
+            name="description"
+        >Propose scheduling an activity (to-do, call, email...) on an Odoo record for a user. Nothing is created until the user who asked confirms it with the link shown under your reply.</field>
+        <field name="model_id" ref="model_ai_discuss_bot_tools" />
+        <field name="function_name">_ai_bot_propose_activity</field>
+        <field name="kind">generic_model</field>
+    </record>
+    <record id="ai_tool_propose_note" model="ai.tool">
+        <field name="name">propose_note</field>
+        <field
+            name="description"
+        >Propose logging an internal note on an Odoo record. Nothing is posted until the user who asked confirms it with the link shown under your reply.</field>
+        <field name="model_id" ref="model_ai_discuss_bot_tools" />
+        <field name="function_name">_ai_bot_propose_note</field>
         <field name="kind">generic_model</field>
     </record>
 </odoo>

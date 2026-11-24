@@ -5,12 +5,12 @@
     <!-- The bot is an internal user without a password, so nobody can log in
          as it. It answers only after an administrator sets its
          "AI Bot Connection" (Settings > Users > Claude > AI Bot tab). -->
-    <record id="partner_ai_bot_claude" model="res.partner">
+    <record id="res_partner_ai_bot_claude" model="res.partner">
         <field name="name">Claude</field>
     </record>
-    <record id="user_ai_bot_claude" model="res.users">
+    <record id="res_users_ai_bot_claude" model="res.users">
         <field name="login">ai_bot_claude</field>
-        <field name="partner_id" ref="partner_ai_bot_claude" />
+        <field name="partner_id" ref="res_partner_ai_bot_claude" />
         <field name="notification_type">inbox</field>
         <field name="groups_id" eval="[(6, 0, [ref('base.group_user')])]" />
         <field
@@ -22,6 +22,8 @@
                 ref('ai_tool_search_records'),
                 ref('ai_tool_aggregate_records'),
                 ref('ai_tool_get_current_record'),
+                ref('ai_tool_propose_activity'),
+                ref('ai_tool_propose_note'),
             ])]"
         />
     </record>

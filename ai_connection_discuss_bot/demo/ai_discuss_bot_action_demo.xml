@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <!-- Proposal waiting for the confirmation of the person who asked -->
+    <record id="ai_discuss_bot_action_proposed_demo" model="ai.discuss.bot.action">
+        <field name="request_id" ref="ai_discuss_bot_request_tools_demo" />
+        <field name="asker_user_id" ref="base.user_demo" />
+        <field name="action_type">activity</field>
+        <field name="res_model">res.partner</field>
+        <field name="res_id" ref="base.res_partner_2" />
+        <field
+            name="name"
+        >Call: 'Call the customer' on the customer (Contact), assigned to Marc Demo</field>
+        <field name="description">Ask about the delivery date.</field>
+        <field
+            name="values_json"
+            eval="'{&quot;summary&quot;: &quot;Call the customer&quot;, &quot;note&quot;: &quot;Ask about the delivery date.&quot;, &quot;date_deadline&quot;: &quot;' + (DateTime.today() + relativedelta(days=3)).strftime('%Y-%m-%d') + '&quot;, &quot;user_id&quot;: ' + str(ref('base.user_demo')) + ', &quot;activity_type_id&quot;: ' + str(ref('mail.mail_activity_data_call')) + '}'"
+        />
+    </record>
+
+    <!-- Confirmed proposal -->
+    <record id="ai_discuss_bot_action_done_demo" model="ai.discuss.bot.action">
+        <field name="request_id" ref="ai_discuss_bot_request_done_demo" />
+        <field name="asker_user_id" ref="base.user_demo" />
+        <field name="action_type">note</field>
+        <field name="res_model">res.partner</field>
+        <field name="res_id" ref="base.res_partner_1" />
+        <field
+            name="name"
+        >Log a note on the customer (Contact): The customer asked for the delivery date.</field>
+        <field name="description">The customer asked for the delivery date.</field>
+        <field
+            name="values_json"
+        >{"body": "The customer asked for the delivery date."}</field>
+        <field name="state">done</field>
+        <field name="decided_date" eval="DateTime.now()" />
+    </record>
+
+    <!-- Cancelled proposal -->
+    <record id="ai_discuss_bot_action_cancelled_demo" model="ai.discuss.bot.action">
+        <field name="request_id" ref="ai_discuss_bot_request_done_demo" />
+        <field name="asker_user_id" ref="base.user_demo" />
+        <field name="action_type">note</field>
+        <field name="res_model">res.partner</field>
+        <field name="res_id" ref="base.res_partner_1" />
+        <field
+            name="name"
+        >Log a note on the customer (Contact): Offer spare parts.</field>
+        <field name="description">Offer spare parts.</field>
+        <field name="values_json">{"body": "Offer spare parts."}</field>
+        <field name="state">cancelled</field>
+        <field name="decided_date" eval="DateTime.now()" />
+    </record>
+</odoo>

@@ -6,7 +6,7 @@ import json
 import logging
 
 from odoo import fields, models
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError
 from odoo.tools import html2plaintext
 
 from odoo.addons.ai_tool.tools import aitool
@@ -29,10 +29,31 @@ SKIPPED_FIELDS = {
     "access_warning",
 }
 SKIPPED_PREFIXES = ("message_", "activity_", "website_message", "rating_")
+MAX_PROPOSALS = 5
+# Target of a proposal; both empty = the record whose chatter this is.
+TARGET_SCHEMA = {
+    "model": {
+        "type": "string",
+        "description": "Technical model of the target record, e.g. "
+        "'res.partner'. Leave empty for the record whose chatter this is.",
+    },
+    "record_id": {
+        "type": "integer",
+        "description": "ID of the target record. Leave empty for the record "
+        "whose chatter this is.",
+    },
+}
+
+
+class AiToolInputError(Exception):
+    """A tool was called with input it cannot use. The message is for the AI
+    (returned as the tool result, see _ai_bot_call), not for the user, so it
+    is not translated."""
 
 
 class AiDiscussBotTools(models.AbstractModel):
-    """Read-only Odoo data tools for the AI Discuss Bot.
+    """Odoo data tools for the AI Discuss Bot: read-only tools, and proposal
+    tools that change nothing until the user who asked confirms.
 
     The ``ai.tool`` records pointing here are executed with superuser rights
     (plain users cannot read ``ir.model``, which ``ai.tool`` needs). Every tool
@@ -67,7 +88,7 @@ class AiDiscussBotTools(models.AbstractModel):
         def run(env):
             words = (query or "").strip()
             if not words:
-                raise UserError("Give a word to search for.")
+                raise AiToolInputError("Give a word to search for.")
             candidates = (
                 env["ir.model"]
                 .sudo()
@@ -242,13 +263,13 @@ class AiDiscussBotTools(models.AbstractModel):
     def _ai_bot_get_current_record(self, record=None, **kwargs):
         def run(env):
             if not record or record._name == "discuss.channel":
-                raise UserError(
+                raise AiToolInputError(
                     "This conversation is a chat, not the chatter of a business "
                     "record. Use search_records instead."
                 )
             current = record.with_env(env).exists()
             if not current:
-                raise UserError("The record no longer exists.")
+                raise AiToolInputError("The record no longer exists.")
             current.check_access("read")
             return {
                 "model": current._name,
@@ -261,14 +282,233 @@ class AiDiscussBotTools(models.AbstractModel):
         return self._ai_bot_call("get_current_record", run)
 
     # ------------------------------------------------------------------
+    # Proposal tools: they validate and store a proposal; the change is
+    # made only when the user who asked confirms it (ai.discuss.bot.action)
+    # ------------------------------------------------------------------
+
+    @aitool(
+        input_schema={
+            **TARGET_SCHEMA,
+            "summary": {
+                "type": "string",
+                "description": "Short title of the activity, e.g. 'Call back "
+                "about the delivery date'.",
+            },
+            "note": {
+                "type": "string",
+                "description": "Optional details for the person doing it.",
+            },
+            "date_deadline": {
+                "type": "string",
+                "description": "Due date as YYYY-MM-DD. Default: today.",
+            },
+            "assigned_to": {
+                "type": "string",
+                "description": "Name or login of the internal user who must do "
+                "it. Default: the user who asked.",
+            },
+            "activity_type": {
+                "type": "string",
+                "description": "Activity type name, e.g. 'Call', 'Email', "
+                "'To-Do'. Default: To-Do.",
+            },
+        },
+        required_inputs=["summary"],
+        output_schema={"status": {"type": "string"}},
+    )
+    def _ai_bot_propose_activity(
+        self,
+        record=None,
+        model=None,
+        record_id=None,
+        summary=None,
+        note=None,
+        date_deadline=None,
+        assigned_to=None,
+        activity_type=None,
+        **kwargs,
+    ):
+        def run(env):
+            target = self._ai_bot_target(env, record, model, record_id)
+            if "activity_ids" not in target._fields:
+                raise AiToolInputError(
+                    f"Activities cannot be scheduled on {target._name}."
+                )
+            target.check_access("write")
+            if not (summary or "").strip():
+                raise AiToolInputError("Give a summary.")
+            deadline = fields.Date.context_today(target)
+            if date_deadline:
+                try:
+                    deadline = fields.Date.to_date(date_deadline)
+                except ValueError as error:
+                    raise AiToolInputError(
+                        "date_deadline must be YYYY-MM-DD."
+                    ) from error
+            user = self._ai_bot_find_user(env, assigned_to)
+            act_type = self._ai_bot_find_activity_type(env, target, activity_type)
+            values = {
+                "summary": summary.strip(),
+                "note": (note or "").strip(),
+                "date_deadline": fields.Date.to_string(deadline),
+                "user_id": user.id,
+                "activity_type_id": act_type.id,
+            }
+            name = (
+                f"{act_type.name}: '{values['summary']}' on "
+                f"{target.display_name} ({target._description}), due "
+                f"{values['date_deadline']}, assigned to {user.name}"
+            )
+            return self._ai_bot_store_proposal(
+                "activity", target, values, name, values["note"]
+            )
+
+        return self._ai_bot_call(
+            "propose_activity",
+            run,
+            model=model,
+            record_id=record_id,
+            summary=summary,
+            date_deadline=date_deadline,
+            assigned_to=assigned_to,
+            activity_type=activity_type,
+        )
+
+    @aitool(
+        input_schema={
+            **TARGET_SCHEMA,
+            "body": {
+                "type": "string",
+                "description": "Text of the internal note, Markdown allowed.",
+            },
+        },
+        required_inputs=["body"],
+        output_schema={"status": {"type": "string"}},
+    )
+    def _ai_bot_propose_note(
+        self, record=None, model=None, record_id=None, body=None, **kwargs
+    ):
+        def run(env):
+            target = self._ai_bot_target(env, record, model, record_id)
+            if not hasattr(target, "message_post") or target._name == (
+                "discuss.channel"
+            ):
+                raise AiToolInputError(f"Notes cannot be logged on {target._name}.")
+            target.check_access(target._mail_post_access)
+            text = (body or "").strip()
+            if not text:
+                raise AiToolInputError("Give the text of the note.")
+            name = (
+                f"Log a note on {target.display_name} ({target._description}): "
+                f"{text[:80]}{'...' if len(text) > 80 else ''}"
+            )
+            return self._ai_bot_store_proposal(
+                "note", target, {"body": text}, name, text
+            )
+
+        return self._ai_bot_call(
+            "propose_note", run, model=model, record_id=record_id, body=body
+        )
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _ai_bot_target(self, env, record, model, record_id):
+        """The record a proposal is about: ``model``/``record_id`` when given,
+        else the record whose chatter the conversation is in."""
+        if model or record_id:
+            if not (model and record_id):
+                raise AiToolInputError("Give both model and record_id, or neither.")
+            Model = self._ai_bot_model(env, model)
+            try:
+                target = Model.browse(int(record_id)).exists()
+            except (TypeError, ValueError) as error:
+                raise AiToolInputError("record_id must be a number.") from error
+        elif record and record._name != "discuss.channel":
+            target = record.with_env(env).exists()
+        else:
+            raise AiToolInputError(
+                "This conversation is a chat: give model and record_id "
+                "(look the record up with search_records first)."
+            )
+        if not target:
+            raise AiToolInputError("The record does not exist.")
+        target.check_access("read")
+        return target
+
+    def _ai_bot_find_user(self, env, name):
+        if not name:
+            return env.user
+        users = env["res.users"].search(
+            [
+                ("share", "=", False),
+                "|",
+                ("login", "=ilike", name),
+                ("name", "ilike", name),
+            ],
+            limit=6,
+        )
+        exact = users.filtered(lambda user: user.name.lower() == name.lower())
+        if len(exact) == 1:
+            return exact
+        if len(users) == 1:
+            return users
+        if not users:
+            raise AiToolInputError(f"No internal user matches '{name}'.")
+        raise AiToolInputError(
+            f"Several users match '{name}': {', '.join(users.mapped('name'))}. "
+            "Ask which one."
+        )
+
+    def _ai_bot_find_activity_type(self, env, target, name):
+        ActivityType = env["mail.activity.type"]
+        model_domain = [
+            "|",
+            ("res_model", "=", False),
+            ("res_model", "=", target._name),
+        ]
+        if name:
+            types = ActivityType.search([("name", "=ilike", name)] + model_domain)
+            if not types:
+                types = ActivityType.search([("name", "ilike", name)] + model_domain)
+            if len(types) == 1:
+                return types
+            available = ActivityType.search(model_domain).mapped("name")
+            raise AiToolInputError(
+                f"Activity type '{name}' is not unique or unknown. Available: "
+                f"{', '.join(available)}."
+            )
+        todo = env.ref("mail.mail_activity_data_todo", raise_if_not_found=False)
+        return todo or target._default_activity_type()
+
+    def _ai_bot_store_proposal(self, action_type, target, values, name, description):
+        request_id = self.env.context.get("ai_discuss_bot_request_id")
+        request = self.env["ai.discuss.bot.request"].sudo().browse(request_id).exists()
+        if not request:
+            raise AiToolInputError(
+                "Proposals can only be made while answering a question."
+            )
+        if len(request.action_ids) >= MAX_PROPOSALS:
+            raise AiToolInputError(f"At most {MAX_PROPOSALS} proposals per answer.")
+        action = self.env["ai.discuss.bot.action"]._propose(
+            request, action_type, target, values, name, description
+        )
+        return {
+            "status": "waiting_for_user_confirmation",
+            "proposal": action.name,
+            "next_step": "Nothing has been changed yet. A confirmation link is "
+            "added under your reply; tell the user to confirm it there.",
+        }
 
     def _ai_bot_user_env(self):
         user_id = self.env.context.get("ai_discuss_bot_user_id")
         if not user_id:
             raise AccessError(
-                "AI bot tools run only on behalf of the user who asked the question."
+                self.env._(
+                    "AI bot tools run only on behalf of the user who asked "
+                    "the question."
+                )
             )
         return self.env(user=user_id, su=False)
 
@@ -295,13 +535,13 @@ class AiDiscussBotTools(models.AbstractModel):
 
     def _ai_bot_model(self, env, model):
         if not isinstance(model, str) or model not in env:
-            raise UserError(
+            raise AiToolInputError(
                 f"Unknown model '{model}'. Use find_models to look up the "
                 "technical name."
             )
         Model = env[model]
         if Model._abstract or Model._transient:
-            raise UserError(f"'{model}' does not store records.")
+            raise AiToolInputError(f"'{model}' does not store records.")
         Model.check_access("read")
         return Model
 
@@ -314,7 +554,9 @@ class AiDiscussBotTools(models.AbstractModel):
             except ValueError:
                 domain = ast.literal_eval(domain)
         if not isinstance(domain, list):
-            raise UserError("The domain must be a list, e.g. [['name', 'ilike', 'x']].")
+            raise AiToolInputError(
+                "The domain must be a list, e.g. [['name', 'ilike', 'x']]."
+            )
         return [tuple(term) if isinstance(term, list) else term for term in domain]
 
     def _ai_bot_fields_get(self, Model):
@@ -335,7 +577,7 @@ class AiDiscussBotTools(models.AbstractModel):
         if requested:
             unknown = [name for name in requested if name not in available]
             if unknown:
-                raise UserError(
+                raise AiToolInputError(
                     f"Unknown or unreadable fields on {Model._name}: "
                     f"{', '.join(unknown)}. Use get_model_fields."
                 )

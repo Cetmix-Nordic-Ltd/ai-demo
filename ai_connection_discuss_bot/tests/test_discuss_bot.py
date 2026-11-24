@@ -4,15 +4,16 @@
 import json
 from unittest.mock import patch
 
-from odoo.tests import TransactionCase, new_test_user, tagged
+from odoo.tests import new_test_user, tagged
+
+from odoo.addons.base.tests.common import BaseCommon
 
 
 @tagged("post_install", "-at_install")
-class TestDiscussBot(TransactionCase):
+class TestDiscussBot(BaseCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
         cls.connection = cls.env["ai.connection"].create(
             {
                 "name": "Test gateway",
@@ -21,10 +22,19 @@ class TestDiscussBot(TransactionCase):
                 "model": "claude-sonnet",
             }
         )
-        cls.bot = cls.env.ref("ai_connection_discuss_bot.user_ai_bot_claude")
+        cls.bot = cls.env.ref("ai_connection_discuss_bot.res_users_ai_bot_claude")
         cls.bot.ai_bot_connection_id = cls.connection
-        cls.user = new_test_user(cls.env, login="bot_tester", name="Bot Tester")
-        cls.other = new_test_user(cls.env, login="bot_other", name="Other User")
+        # Posting in a contact's chatter needs write access to contacts
+        cls.user = new_test_user(
+            cls.env,
+            notification_type="inbox",
+            login="bot_tester",
+            name="Bot Tester",
+            groups="base.group_user,base.group_partner_manager",
+        )
+        cls.other = new_test_user(
+            cls.env, notification_type="inbox", login="bot_other", name="Other User"
+        )
         cls.Request = cls.env["ai.discuss.bot.request"]
 
     def _patch_run(self, **kwargs):
@@ -52,7 +62,9 @@ class TestDiscussBot(TransactionCase):
         chat.with_user(self.user).message_post(
             body="Mikä on Suomen pääkaupunki?", message_type="comment"
         )
-        request = self.Request.search([("res_id", "=", chat.id)])
+        request = self.Request.search(
+            [("res_model", "=", "discuss.channel"), ("res_id", "=", chat.id)]
+        )
         self.assertEqual(len(request), 1)
         self.assertEqual(request.state, "pending")
         conversation = json.loads(request.messages_json)
@@ -70,8 +82,14 @@ class TestDiscussBot(TransactionCase):
         answers = self._bot_messages(chat)
         self.assertEqual(len(answers), 1)
         self.assertIn("Hei!", answers.body)
+        self.assertIn("Markdown", conversation[0]["content"])
         # The bot's own answer must not queue a new request
-        self.assertEqual(self.Request.search_count([("res_id", "=", chat.id)]), 1)
+        self.assertEqual(
+            self.Request.search_count(
+                [("res_model", "=", "discuss.channel"), ("res_id", "=", chat.id)]
+            ),
+            1,
+        )
 
     def test_history_keeps_roles(self):
         chat = (
@@ -100,13 +118,22 @@ class TestDiscussBot(TransactionCase):
         group.with_user(self.user).message_post(
             body="Hei kaikki", message_type="comment"
         )
-        self.assertFalse(self.Request.search([("res_id", "=", group.id)]))
+        self.assertFalse(
+            self.Request.search(
+                [("res_model", "=", "discuss.channel"), ("res_id", "=", group.id)]
+            )
+        )
         group.with_user(self.user).message_post(
             body="@Claude tiivistä",
             message_type="comment",
             partner_ids=self.bot.partner_id.ids,
         )
-        self.assertEqual(self.Request.search_count([("res_id", "=", group.id)]), 1)
+        self.assertEqual(
+            self.Request.search_count(
+                [("res_model", "=", "discuss.channel"), ("res_id", "=", group.id)]
+            ),
+            1,
+        )
 
     def test_record_chatter_mention_answers_with_note(self):
         partner = self.env["res.partner"].create({"name": "Asiakas Oy"})
@@ -137,7 +164,11 @@ class TestDiscussBot(TransactionCase):
         partner.with_user(self.user).message_post(
             body="Muistiinpano", message_type="comment"
         )
-        self.assertFalse(self.Request.search([("res_model", "=", "res.partner")]))
+        self.assertFalse(
+            self.Request.search(
+                [("res_model", "=", "res.partner"), ("res_id", "=", partner.id)]
+            )
+        )
 
     def test_error_is_reported(self):
         chat = (
@@ -148,7 +179,9 @@ class TestDiscussBot(TransactionCase):
         chat.with_user(self.user).message_post(body="Hei", message_type="comment")
         with self._patch_run(side_effect=RuntimeError("gateway down")):
             self.Request._cron_process_requests()
-        request = self.Request.search([("res_id", "=", chat.id)])
+        request = self.Request.search(
+            [("res_model", "=", "discuss.channel"), ("res_id", "=", chat.id)]
+        )
         self.assertEqual(request.state, "error")
         self.assertIn("gateway down", request.error)
         self.assertEqual(len(self._bot_messages(chat)), 1)
@@ -161,4 +194,43 @@ class TestDiscussBot(TransactionCase):
             .channel_get([self.bot.partner_id.id])
         )
         chat.with_user(self.user).message_post(body="Hei", message_type="comment")
-        self.assertFalse(self.Request.search([("res_id", "=", chat.id)]))
+        self.assertFalse(
+            self.Request.search(
+                [("res_model", "=", "discuss.channel"), ("res_id", "=", chat.id)]
+            )
+        )
+
+    def test_markdown_answer_is_rendered(self):
+        chat = (
+            self.env["discuss.channel"]
+            .with_user(self.user)
+            .channel_get([self.bot.partner_id.id])
+        )
+        chat.with_user(self.user).message_post(body="Myynti?", message_type="comment")
+        answer = "<think>pohdintaa</think>**Myynti** kasvoi:\n\n- A\n- B"
+        with self._patch_run(return_value=(answer, 1, 1, 1)):
+            self.Request._cron_process_requests()
+        body = self._bot_messages(chat).body
+        self.assertIn("<strong>Myynti</strong>", body)
+        self.assertIn("<li>A</li>", body)
+        self.assertNotIn("pohdintaa", body)
+        self.assertNotIn("**", body)
+
+    def test_interrupted_request_is_given_up(self):
+        chat = (
+            self.env["discuss.channel"]
+            .with_user(self.user)
+            .channel_get([self.bot.partner_id.id])
+        )
+        chat.with_user(self.user).message_post(body="Hei", message_type="comment")
+        request = self.Request.search(
+            [("res_model", "=", "discuss.channel"), ("res_id", "=", chat.id)]
+        )
+        # Two earlier runs were killed before they could finish
+        request.attempts = 2
+        with self._patch_run() as run:
+            self.Request._cron_process_requests()
+        run.assert_not_called()
+        self.assertEqual(request.state, "error")
+        self.assertIn("interrupted", request.error)
+        self.assertEqual(len(self._bot_messages(chat)), 1)

@@ -4,7 +4,9 @@
 import json
 from unittest.mock import patch
 
-from odoo.tests import TransactionCase, new_test_user, tagged
+from odoo.tests import new_test_user, tagged
+
+from odoo.addons.base.tests.common import BaseCommon
 
 
 class FakeClient:
@@ -46,11 +48,10 @@ def answer_step(text):
 
 
 @tagged("post_install", "-at_install")
-class TestBotTools(TransactionCase):
+class TestBotTools(BaseCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
         cls.connection = cls.env["ai.connection"].create(
             {
                 "name": "Test gateway",
@@ -59,9 +60,11 @@ class TestBotTools(TransactionCase):
                 "model": "claude-sonnet",
             }
         )
-        cls.bot = cls.env.ref("ai_connection_discuss_bot.user_ai_bot_claude")
+        cls.bot = cls.env.ref("ai_connection_discuss_bot.res_users_ai_bot_claude")
         cls.bot.ai_bot_connection_id = cls.connection
-        cls.user = new_test_user(cls.env, login="tool_tester", name="Tool Tester")
+        cls.user = new_test_user(
+            cls.env, notification_type="inbox", login="tool_tester", name="Tool Tester"
+        )
         cls.customer = cls.env["res.partner"].create(
             {"name": "Tool Test Oy", "is_company": True, "city": "Tampere"}
         )
@@ -76,7 +79,8 @@ class TestBotTools(TransactionCase):
 
     def test_default_tools_are_safe_and_defined(self):
         tools = self.bot._ai_bot_safe_tools()
-        self.assertEqual(len(tools), 6)
+        self.assertEqual(len(tools), 8)
+        self.assertEqual(len(self.bot._ai_bot_write_tools()), 2)
         for tool in tools:
             definition = tool._get_tool_definition()
             self.assertEqual(definition["inputSchema"]["type"], "object")
@@ -162,7 +166,9 @@ class TestBotTools(TransactionCase):
         chat.with_user(self.user).message_post(
             body="Missä kaupungissa Tool Test Oy on?", message_type="comment"
         )
-        request = self.env["ai.discuss.bot.request"].search([("res_id", "=", chat.id)])
+        request = self.env["ai.discuss.bot.request"].search(
+            [("res_model", "=", "discuss.channel"), ("res_id", "=", chat.id)]
+        )
         self.assertEqual(request.asker_user_id, self.user)
         self.assertIn("search_records", json.loads(request.messages_json)[0]["content"])
 
