@@ -137,9 +137,14 @@ Usage
 
 -  **Changes**: ask for example
    ``@Claude remind Maija to call this customer on Friday``. The answer
-   ends with a *Review and confirm* link; open it and press *Confirm* or
-   *Cancel*. Opening the link changes nothing, a chat reply such as
-   "yes" does not confirm, and a proposal expires after 24 hours.
+   shows the proposal with *Confirm* and *Cancel* buttons; only the
+   person who asked sees the buttons, others see the state. A chat reply
+   such as "yes" does not confirm, and a proposal expires after 24
+   hours.
+
+E-mail notifications and other clients get a *Review and confirm* link
+instead, which opens a review page with the same buttons. Opening the
+link changes nothing.
 
 .. image:: https://raw.githubusercontent.com/Cetmix-Nordic-Ltd/ai-demo/18.0/ai_connection_discuss_bot/static/description/img/review_page.png
    :alt: Review page of a proposal
@@ -167,8 +172,6 @@ before using the bot in production, or use a local model.
 Known issues / Roadmap
 ======================
 
--  The confirmation of proposals opens a separate page; buttons inside
-   Discuss would need an extension of the Discuss message component.
 -  Two proposal types exist (activity, note); further types could create
    for example project tasks or quotation drafts.
 -  ``ai_connection`` does not add the result of a tool that raises an

@@ -79,6 +79,15 @@ class AiDiscussBotAction(models.Model):
     )
     decided_date = fields.Datetime(string="Decided on", readonly=True)
     error = fields.Text(readonly=True)
+    message_id = fields.Many2one(
+        "mail.message",
+        string="Bot Reply",
+        readonly=True,
+        ondelete="set null",
+        index="btree_not_null",
+        help="The bot's answer that shows this proposal; Discuss shows the "
+        "confirmation buttons on it.",
+    )
 
     # ------------------------------------------------------------------
     # Proposing (called by ai.discuss.bot.tools)
@@ -123,6 +132,41 @@ class AiDiscussBotAction(models.Model):
         if action.state == "proposed" and action._is_expired():
             action.write({"state": "expired", "decided_date": fields.Datetime.now()})
         return action
+
+    @api.model
+    def _get_for_user(self, action_id, user):
+        """The proposal ``action_id`` if ``user`` is the one who must decide
+        it, else an empty recordset. For the buttons in Discuss: the JSON
+        request carries the user's session, no token is needed."""
+        action = self.sudo().browse(int(action_id)).exists()
+        if not action or action.asker_user_id != user:
+            return self.browse()
+        if action.state == "proposed" and action._is_expired():
+            action.write({"state": "expired", "decided_date": fields.Datetime.now()})
+        return action
+
+    def _to_discuss(self, user):
+        """Data of the proposals for the buttons in Discuss."""
+        states = dict(self._fields["state"]._description_selection(self.env))
+        result = []
+        for action in self.sudo():
+            if action.state == "proposed" and action._is_expired():
+                action.write(
+                    {"state": "expired", "decided_date": fields.Datetime.now()}
+                )
+            result.append(
+                {
+                    "id": action.id,
+                    "name": action.name,
+                    "state": action.state,
+                    "state_label": states.get(action.state, action.state),
+                    "error": action.error or "",
+                    "asker_name": action.asker_user_id.name,
+                    "can_decide": action.state == "proposed"
+                    and action.asker_user_id == user,
+                }
+            )
+        return result
 
     def _is_expired(self):
         self.ensure_one()

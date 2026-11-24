@@ -1,0 +1,4 @@
+// The links of the answer are replaced by the buttons when those are shown
+.o-mail-Message-body:has(.o_ai_bot_buttons) .o_ai_bot_actions {
+    display: none;
+}
