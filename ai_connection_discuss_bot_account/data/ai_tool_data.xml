@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <!-- Read-only tools, run with the rights of the user who asked. -->
+    <record id="ai_tool_cash_flow_forecast" model="ai.tool">
+        <field name="name">cash_flow_forecast</field>
+        <field
+            name="description"
+        >Cash flow forecast of the user's company computed by Odoo: opening cash, money in and out per week or month by category (open customer invoices, open vendor bills, forecast lines by source: sales orders, purchase orders, contracts, recurring costs, VAT, manual), overdue items, running balance and the lowest point. With realistic=true, open customer invoices are moved by each customer's average payment delay. Use these figures as they are; do not add them up yourself.</field>
+        <field
+            name="model_id"
+            ref="ai_connection_discuss_bot.model_ai_discuss_bot_tools"
+        />
+        <field name="function_name">_ai_bot_cash_flow_forecast</field>
+        <field name="kind">generic</field>
+    </record>
+    <record id="ai_tool_cash_flow_history" model="ai.tool">
+        <field name="name">cash_flow_history</field>
+        <field
+            name="description"
+        >Actual cash flow statement of the user's company per month, computed by Odoo from the bank and cash accounts: money in and out by category (customers, suppliers, taxes, wages and other liabilities, other operating, investments, financing, other), internal transfers left out, with opening and closing cash.</field>
+        <field
+            name="model_id"
+            ref="ai_connection_discuss_bot.model_ai_discuss_bot_tools"
+        />
+        <field name="function_name">_ai_bot_cash_flow_history</field>
+        <field name="kind">generic</field>
+    </record>
+    <record id="ai_connection_discuss_bot.res_users_ai_bot_claude" model="res.users">
+        <field
+            name="ai_bot_tool_ids"
+            eval="[
+                Command.link(ref('ai_tool_cash_flow_forecast')),
+                Command.link(ref('ai_tool_cash_flow_history')),
+            ]"
+        />
+    </record>
+</odoo>
