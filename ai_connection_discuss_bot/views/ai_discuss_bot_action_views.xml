@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <record id="ai_discuss_bot_action_view_list" model="ir.ui.view">
+        <field name="model">ai.discuss.bot.action</field>
+        <field name="arch" type="xml">
+            <list
+                create="0"
+                decoration-muted="state in ('cancelled', 'expired')"
+                decoration-danger="state == 'failed'"
+                decoration-info="state == 'proposed'"
+            >
+                <field name="create_date" string="Proposed on" />
+                <field name="bot_user_id" />
+                <field name="asker_user_id" />
+                <field name="action_type" />
+                <field name="name" />
+                <field name="decided_date" optional="show" />
+                <field name="state" widget="badge" />
+            </list>
+        </field>
+    </record>
+
+    <record id="ai_discuss_bot_action_view_form" model="ir.ui.view">
+        <field name="model">ai.discuss.bot.action</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0">
+                <header>
+                    <field name="state" widget="statusbar" />
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name" />
+                            <field name="action_type" />
+                            <field name="res_model" />
+                            <field name="res_id" />
+                        </group>
+                        <group>
+                            <field name="bot_user_id" />
+                            <field name="asker_user_id" />
+                            <field name="request_id" />
+                            <field name="decided_date" />
+                        </group>
+                    </group>
+                    <group string="Error" invisible="not error">
+                        <field name="error" nolabel="1" colspan="2" />
+                    </group>
+                    <group string="Details" invisible="not description">
+                        <field name="description" nolabel="1" colspan="2" />
+                    </group>
+                    <group string="Values">
+                        <field name="values_json" nolabel="1" colspan="2" />
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="ai_discuss_bot_action_view_search" model="ir.ui.view">
+        <field name="model">ai.discuss.bot.action</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name" />
+                <field name="asker_user_id" />
+                <filter
+                    name="proposed"
+                    string="Waiting for confirmation"
+                    domain="[('state', '=', 'proposed')]"
+                />
+                <filter name="done" string="Done" domain="[('state', '=', 'done')]" />
+                <group expand="0" string="Group By">
+                    <filter
+                        name="group_state"
+                        string="State"
+                        context="{'group_by': 'state'}"
+                    />
+                    <filter
+                        name="group_type"
+                        string="Type"
+                        context="{'group_by': 'action_type'}"
+                    />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="ai_discuss_bot_action_action" model="ir.actions.act_window">
+        <field name="name">AI Bot Proposals</field>
+        <field name="res_model">ai.discuss.bot.action</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem
+        id="ai_discuss_bot_action_menu"
+        name="AI Bot Proposals"
+        parent="ai_tool.ai_menu_root"
+        action="ai_discuss_bot_action_action"
+        groups="base.group_system"
+        sequence="21"
+    />
+</odoo>

@@ -1,0 +1,1002 @@
+# Ollama Jet Template for Cetmix Tower.
+# Runs open-source language models locally (CPU is enough for small models) so
+# that the LiteLLM Gateway can offer them to Odoo next to Claude.
+cetmix_tower_yaml_version: 1
+manifest:
+  name: Ollama (Docker)
+  summary: Local open-source language models (Ollama) for the LiteLLM Gateway
+  description: |
+    Atomized Jet Template: one Ollama container per server, attached to the
+    'tower' Docker network. It publishes no port and has no public route -
+    Ollama has no authentication, so only containers on the Docker network
+    (the LiteLLM Gateway) can reach it at http://<ollama_internal_host>:11434.
+    Odoo never talks to Ollama directly: add the models to a LiteLLM Gateway
+    (variables 'litellm_ollama_url' and 'litellm_ollama_models', or the
+    gateway Jet's config.yaml) and use them through the same AI Connection
+    URL and virtual key as Claude.
+
+    Models are stored in the Docker volume '<jet reference>_models', which
+    Remove keeps and Destroy deletes. Build downloads the models listed in
+    'ollama_models'; the 'Pull models' action downloads newly added ones.
+
+    Sizing (CPU only, Ollama's default quantization, 16384-token context):
+    qwen3:4b weights 2.5 GB + KV cache 2.25 GiB (f16, 144 KiB per token) +
+    a few hundred MB = about 5-5.5 GB RAM; qwen3:8b about 8-8.5 GB. With
+    OLLAMA_KV_CACHE_TYPE=q8_0 and OLLAMA_FLASH_ATTENTION=1 in 'ollama_extra_env'
+    the KV cache halves (about 4 GB / 7 GB in total). Speed depends on the CPU
+    and memory bandwidth - measure it. Set 'ollama_memory_limit' to at least
+    these figures and 'ollama_cpus' so Odoo and Postgres keep their share.
+
+    Requires the jet template 'docker' of the "Odoo Docker 2.0" import. No
+    secrets. The shared records it uses (stock jet commands, the stop_jet
+    plan, shared variables and tags) are included as copies under the same
+    references: import with "If Record Exists: Skip record".
+records:
+# --------------------------------------------------------------------------
+# Tags
+# --------------------------------------------------------------------------
+- cetmix_tower_model: tag
+  reference: ollama
+  name: Ollama
+  color: 7
+# Shared tags, variables, commands and plan (copies; skipped when they exist)
+- cetmix_tower_model: tag
+  reference: docker
+  name: Docker
+  color: 4
+- cetmix_tower_model: tag
+  reference: jets
+  name: Jets
+  color: 4
+- cetmix_tower_model: tag
+  reference: log
+  name: Log
+  color: 4
+- cetmix_tower_model: tag
+  reference: ai
+  name: AI
+  color: 2
+- cetmix_tower_model: variable
+  reference: tower_docker_network
+  name: Tower Docker Network
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: '^(?:[a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?|(?:\{\{[^{}]+\}\}|{%\s*(if|else|endif)\b[^%]*?%\}))+$'
+  validation_message: false
+  note: |-
+    Name on a Docker network used by Tower.
+    If left blank no Docker network will be used. In such case containers can be exposed directly base on their configuration.
+- cetmix_tower_model: variable
+  reference: docker_container_restart_policy
+  name: Docker Container Restart Policy
+  access_level: manager
+  option_ids:
+  - reference: docker_container_restart_policy_variable_option_1
+    name: Do not restart
+    access_level: manager
+    value_char: 'no'
+    sequence: 10
+  - reference: docker_container_restart_policy_variable_option_1_2
+    name: Restart if it was running
+    access_level: manager
+    value_char: unless-stopped
+    sequence: 11
+  - reference: docker_container_restart_policy_variable_option_1_3
+    name: Always restart
+    access_level: manager
+    value_char: always
+    sequence: 12
+  variable_type: o
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Docker container restart policy.
+    Tells Docker what to do with the container after the host system was restarted.
+- cetmix_tower_model: variable
+  reference: docker_logs_lines
+  name: Docker Logs Lines
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Will show only the specific number of last log lines.
+    docker show logs --tail 50
+- cetmix_tower_model: variable
+  reference: docker_logs_time
+  name: Docker Logs Time
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Will show logs for the last time frame defined by this parameter.
+    docker show logs --from==
+- cetmix_tower_model: command
+  reference: set_jet_as_not_deletable
+  name: Set Jet as not deletable
+  tag_ids:
+  - jets
+  access_level: manager
+  code: |
+    if jet.deletable:
+      jet.write({"deletable": False})
+  allow_parallel_run: false
+  note: false
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: set_jet_as_deletable
+  name: Set Jet as deletable
+  tag_ids:
+  - jets
+  access_level: manager
+  code: |
+    if not jet.deletable:
+      jet.write({
+        "deletable": True
+      })
+  allow_parallel_run: false
+  note: false
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: start_jet_container
+  name: Start jet container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker start {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: Starts the Jet container
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: stop_jet_container
+  name: Stop jet container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker stop {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: false
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: restart_jet_container
+  name: Restart jet container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker restart {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: false
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: remove_jet_container
+  name: Remove Jet Container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker rm -f {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: false
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: plan
+  reference: stop_jet
+  name: Stop Jet
+  tag_ids:
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: stop_jet_plan_line_1
+    sequence: 10
+    command_id: stop_jet_container
+    path: false
+    use_sudo: false
+    condition: false
+    is_make_copy: false
+  note: false
+  on_error_action: e
+  custom_exit_code: 0
+# --------------------------------------------------------------------------
+# Variables
+# --------------------------------------------------------------------------
+- cetmix_tower_model: variable
+  reference: ollama_image
+  name: Ollama Image
+  tag_ids:
+  - ollama
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Docker image of Ollama. Template default ollama/ollama:latest; pin a tested release tag
+    (e.g. ollama/ollama:<version>) for production. A changed value is applied by Rebuild.
+- cetmix_tower_model: variable
+  reference: ollama_internal_host
+  name: Ollama Internal Host
+  tag_ids:
+  - ollama
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+  validation_message: DNS label - lowercase letters, digits and hyphens.
+  note: Docker network alias of the Ollama container. Set by Prepare from the Jet reference unless already set on the Jet. Applied at container create - Rebuild after changing.
+- cetmix_tower_model: variable
+  reference: ollama_internal_url
+  name: Ollama Internal URL
+  tag_ids:
+  - ollama
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: Informational. Written by Prepare - the value to put into 'litellm_ollama_url' of a LiteLLM Gateway on the same server.
+- cetmix_tower_model: variable
+  reference: ollama_models
+  name: Ollama Models
+  tag_ids:
+  - ollama
+  - ai
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-zA-Z0-9._:/-]+(,[a-zA-Z0-9._:/-]+)*$
+  validation_message: Comma separated Ollama model tags without spaces, e.g. qwen3:4b,qwen3:8b
+  note: |-
+    Models downloaded by Build and by the 'Pull models' action, as Ollama library tags, comma separated
+    (e.g. qwen3:4b,qwen3:8b). Choose models that support tool calling if the Odoo bot uses tools.
+    Removing a tag here does not delete the model; it stays in the volume until Destroy.
+- cetmix_tower_model: variable
+  reference: ollama_context_length
+  name: Ollama Context Length
+  tag_ids:
+  - ollama
+  - ai
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[0-9]+$
+  validation_message: A number of tokens, e.g. 16384
+  note: |-
+    OLLAMA_CONTEXT_LENGTH - tokens a model sees at once. Ollama silently drops the oldest part of longer prompts,
+    and the Odoo bot's prompt (instructions, tool definitions, history, tool results) easily exceeds 8k.
+    More context needs more RAM. Template default 16384. Applied by Rebuild.
+- cetmix_tower_model: variable
+  reference: ollama_keep_alive
+  name: Ollama Keep Alive
+  tag_ids:
+  - ollama
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^-?[0-9]+[smh]?$
+  validation_message: A duration such as 30m, 1h or 24h; -1 keeps the model loaded forever.
+  note: OLLAMA_KEEP_ALIVE - how long a model stays in RAM after the last request. Loading a model takes seconds to a minute on CPU. Template default 1h. Applied by Rebuild.
+- cetmix_tower_model: variable
+  reference: ollama_memory_limit
+  name: Ollama Memory Limit
+  tag_ids:
+  - ollama
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[0-9]+[kmg]?$
+  validation_message: A docker --memory value such as 8g or 6144m.
+  note: docker --memory of the Ollama container, e.g. 8g. Keeps a large model from starving Odoo and Postgres of RAM; Ollama fails to load a model that does not fit. Empty = no limit. Applied by Rebuild.
+- cetmix_tower_model: variable
+  reference: ollama_cpus
+  name: Ollama CPUs
+  tag_ids:
+  - ollama
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[0-9]+(\.[0-9]+)?$
+  validation_message: A number of CPUs, e.g. 4 or 3.5
+  note: docker --cpus of the Ollama container. Leave at least one or two cores for Odoo and Postgres - an answer keeps every allowed core busy. Empty = all cores. Applied by Rebuild.
+- cetmix_tower_model: variable
+  reference: ollama_extra_env
+  name: Ollama Extra Env
+  tag_ids:
+  - ollama
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Extra environment variables for the Ollama container, one KEY=VALUE per line. To halve the KV cache memory: OLLAMA_KV_CACHE_TYPE=q8_0 and OLLAMA_FLASH_ATTENTION=1 on two lines.
+    No '-e' and no backslashes; each line becomes --env "KEY=VALUE". Applied by Rebuild.
+# --------------------------------------------------------------------------
+# Commands
+# --------------------------------------------------------------------------
+- cetmix_tower_model: command
+  reference: set_ollama_jet_configuration_variables
+  name: Set Ollama jet configuration variables
+  tag_ids:
+  - ollama
+  - jets
+  access_level: manager
+  code: |
+    ref = jet.reference.lower()
+    host = "".join([c if c.isalnum() else "-" for c in ref]).strip("-")
+    if not jet.get_variable_value("ollama_internal_host", no_fallback=True):
+        jet.set_variable_value("ollama_internal_host", host)
+    url = "http://" + jet.get_variable_value("ollama_internal_host") + ":11434"
+    jet.set_variable_value("ollama_internal_url", url)
+    result = {
+        "exit_code": 0,
+        "message": "Set litellm_ollama_url = " + url + " on the LiteLLM Gateway Jet.",
+    }
+  allow_parallel_run: false
+  note: Prepare step. Derives 'ollama_internal_host' (hyphens) from the Jet reference unless already set on the Jet and writes 'ollama_internal_url' for the LiteLLM Gateway.
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: pull_ollama_image
+  name: Pull Ollama image
+  tag_ids:
+  - ollama
+  - docker
+  access_level: manager
+  code: docker pull {{ ollama_image }}
+  allow_parallel_run: false
+  note: Pulls the image named in 'ollama_image' so Build and Rebuild pick up a moved tag.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: create_ollama_container
+  name: Create Ollama container
+  tag_ids:
+  - ollama
+  - docker
+  - jets
+  access_level: manager
+  code: |
+    docker create \
+      --name {{ tower.jet.reference }} \
+      --label tower.jet={{ tower.jet.reference }} \
+      --restart {{ docker_container_restart_policy }} \
+      --network={{ tower_docker_network }} \
+      --network-alias {{ ollama_internal_host }} \
+      -v {{ tower.jet.reference }}_models:/root/.ollama \
+      --env OLLAMA_CONTEXT_LENGTH={{ ollama_context_length or 16384 }} \
+      --env OLLAMA_KEEP_ALIVE={{ ollama_keep_alive or '1h' }} \
+      --env OLLAMA_NUM_PARALLEL=1 \
+      --env OLLAMA_MAX_LOADED_MODELS=1 \
+    {% if ollama_memory_limit %}
+      --memory {{ ollama_memory_limit }} \
+    {% endif %}
+    {% if ollama_cpus %}
+      --cpus {{ ollama_cpus }} \
+    {% endif %}
+    {% if ollama_extra_env %}
+    {% for kv in ollama_extra_env.splitlines() %}
+    {% if kv.strip() %}
+      --env "{{ kv.strip() }}" \
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+      {{ ollama_image }}
+  allow_parallel_run: false
+  note: |-
+    docker create for Ollama: joins the Tower network under the 'ollama_internal_host' alias, publishes no host port and no
+    Traefik route (Ollama has no authentication), keeps models in the named volume '<jet reference>_models'.
+    One request at a time and one model in RAM (OLLAMA_NUM_PARALLEL=1, OLLAMA_MAX_LOADED_MODELS=1) - on CPU parallel
+    requests only share the same cores. Optional --memory / --cpus limits. Creates the container only.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: wait_for_ollama
+  name: Wait for Ollama
+  tag_ids:
+  - ollama
+  - docker
+  access_level: manager
+  code: docker run --rm --network {{ tower_docker_network }} curlimages/curl:8.11.1 -sf --retry 30 --retry-delay 2 --retry-all-errors --max-time 5 http://{{ ollama_internal_host }}:11434/api/version
+  allow_parallel_run: true
+  note: Polls /api/version from a throwaway curl container on the Tower network for about a minute. Prints the Ollama version.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: pull_ollama_models
+  name: Pull Ollama models
+  tag_ids:
+  - ollama
+  - ai
+  access_level: manager
+  code: printf '%s\n' {{ ollama_models.replace(",", " ") }} | xargs -r -n1 docker exec {{ tower.jet.reference }} ollama pull
+  allow_parallel_run: false
+  note: |-
+    Downloads every model in 'ollama_models' into the running container, one after another (a model already present is
+    only checked). Several GB per model - can take many minutes. Fails if any model tag does not exist.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: show_ollama_models
+  name: Show Ollama models
+  tag_ids:
+  - ollama
+  - log
+  access_level: manager
+  code: docker exec {{ tower.jet.reference }} ollama list
+  allow_parallel_run: true
+  note: Log view. Models downloaded into the volume, with their size. Read-only.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: show_ollama_loaded_models
+  name: Show Ollama loaded models
+  tag_ids:
+  - ollama
+  - log
+  access_level: manager
+  code: docker exec {{ tower.jet.reference }} ollama ps
+  allow_parallel_run: true
+  note: Log view. Models currently in RAM, their memory use, CPU/GPU split and when they will be unloaded. Read-only.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: show_ollama_jet_logs
+  name: Show Ollama jet logs
+  tag_ids:
+  - ollama
+  - docker
+  - log
+  access_level: manager
+  code: docker logs --since={{ docker_logs_time or '30m' }} --tail={{ docker_logs_lines or 300 }} {{ tower.jet.reference }}
+  allow_parallel_run: true
+  note: Log view. docker logs of the Ollama container (one line per request with its duration), limited by 'docker_logs_time' and 'docker_logs_lines'.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: remove_ollama_models_volume
+  name: Remove Ollama models volume
+  tag_ids:
+  - ollama
+  - docker
+  access_level: root
+  code: docker volume rm {{ tower.jet.reference }}_models
+  allow_parallel_run: false
+  note: Destroy step. Deletes the downloaded models. Fails if the container still uses the volume.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+# --------------------------------------------------------------------------
+# Flight plans
+# --------------------------------------------------------------------------
+- cetmix_tower_model: plan
+  reference: prepare_ollama_jet
+  name: Prepare Ollama Jet
+  tag_ids:
+  - ollama
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: prepare_ollama_jet_line_10
+    sequence: 10
+    command_id: set_jet_as_not_deletable
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: prepare_ollama_jet_line_20
+    sequence: 20
+    command_id: set_ollama_jet_configuration_variables
+    path: false
+    use_sudo: false
+    condition: false
+  note: Create action of the Ollama Jet. Locks the Jet against deletion and sets the internal host and URL variables.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: build_ollama_jet
+  name: Build Ollama Jet
+  tag_ids:
+  - ollama
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: build_ollama_jet_line_10
+    sequence: 10
+    command_id: remove_jet_container
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: build_ollama_jet_line_10_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: false
+  - reference: build_ollama_jet_line_20
+    sequence: 20
+    command_id: pull_ollama_image
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: build_ollama_jet_line_30
+    sequence: 30
+    command_id: create_ollama_container
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: build_ollama_jet_line_40
+    sequence: 40
+    command_id: start_jet_container
+    path: false
+    use_sudo: false
+    condition: '{{ ollama_models }}'
+  - reference: build_ollama_jet_line_50
+    sequence: 50
+    command_id: wait_for_ollama
+    path: false
+    use_sudo: false
+    condition: '{{ ollama_models }}'
+  - reference: build_ollama_jet_line_60
+    sequence: 60
+    command_id: pull_ollama_models
+    path: false
+    use_sudo: false
+    condition: '{{ ollama_models }}'
+  - reference: build_ollama_jet_line_70
+    sequence: 70
+    command_id: stop_jet_container
+    path: false
+    use_sudo: false
+    condition: '{{ ollama_models }}'
+  note: |-
+    Build / Rebuild of the Ollama Jet. Removes any old container, pulls 'ollama_image' and creates a new container.
+    When 'ollama_models' is set it then starts the container, downloads the models and stops it again, so the
+    first question after Start does not wait for a download. Ends with the container created but not started.
+    The models volume is kept, so a Rebuild downloads nothing that is already there.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: start_ollama_jet
+  name: Start Ollama Jet
+  tag_ids:
+  - ollama
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: start_ollama_jet_line_10
+    sequence: 10
+    command_id: start_jet_container
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: start_ollama_jet_line_20
+    sequence: 20
+    command_id: wait_for_ollama
+    path: false
+    use_sudo: false
+    condition: false
+  note: Starts the existing Ollama container and waits until its API answers. Models are loaded into RAM on the first request.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: restart_ollama_jet
+  name: Restart Ollama Jet
+  tag_ids:
+  - ollama
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: restart_ollama_jet_line_10
+    sequence: 10
+    command_id: restart_jet_container
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: restart_ollama_jet_line_20
+    sequence: 20
+    command_id: wait_for_ollama
+    path: false
+    use_sudo: false
+    condition: false
+  note: docker restart of Ollama (frees the RAM of loaded models), then waits for the API. Changed variables need Rebuild.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: pull_ollama_models_plan
+  name: Pull Ollama models
+  tag_ids:
+  - ollama
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: pull_ollama_models_plan_line_10
+    sequence: 10
+    command_id: wait_for_ollama
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: pull_ollama_models_plan_line_20
+    sequence: 20
+    command_id: pull_ollama_models
+    path: false
+    use_sudo: false
+    condition: '{{ ollama_models }}'
+  note: Downloads the models in 'ollama_models' into the running container. Use it after adding a model tag; no restart needed.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: remove_ollama_jet
+  name: Remove Ollama Jet
+  tag_ids:
+  - ollama
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: remove_ollama_jet_line_10
+    sequence: 10
+    command_id: remove_jet_container
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: remove_ollama_jet_line_10_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: false
+  note: Removes the Ollama container only (a missing container is tolerated). The models volume is kept, so Build brings the Jet back without downloading again.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: destroy_ollama_jet
+  name: Destroy Ollama Jet
+  tag_ids:
+  - ollama
+  - jets
+  access_level: root
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: destroy_ollama_jet_line_10
+    sequence: 10
+    command_id: remove_jet_container
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: destroy_ollama_jet_line_10_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: false
+  - reference: destroy_ollama_jet_line_20
+    sequence: 20
+    command_id: remove_ollama_models_volume
+    path: false
+    use_sudo: false
+    action_ids:
+    # A Jet that was never built has no volume; that must not block Destroy.
+    - reference: destroy_ollama_jet_line_20_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: false
+  - reference: destroy_ollama_jet_line_30
+    sequence: 30
+    command_id: set_jet_as_deletable
+    path: false
+    use_sudo: false
+    condition: false
+  note: Terminal cleanup. Removes the container and the models volume, then unlocks the Jet for deletion. The Ollama image is left on the host.
+  on_error_action: e
+  custom_exit_code: 0
+# --------------------------------------------------------------------------
+# Jet template
+# --------------------------------------------------------------------------
+- cetmix_tower_model: jet_template
+  reference: ollama
+  name: Ollama
+  tag_ids:
+  - ollama
+  - ai
+  - docker
+  variable_value_ids:
+  - reference: ollama_value_image
+    access_level: manager
+    sequence: 10
+    variable_id: ollama_image
+    value_char: ollama/ollama:latest
+    required: false
+  - reference: ollama_value_models
+    access_level: manager
+    sequence: 10
+    variable_id: ollama_models
+    value_char: qwen3:4b
+    required: false
+  - reference: ollama_value_context_length
+    access_level: manager
+    sequence: 10
+    variable_id: ollama_context_length
+    value_char: '16384'
+    required: false
+  - reference: ollama_value_keep_alive
+    access_level: manager
+    sequence: 10
+    variable_id: ollama_keep_alive
+    value_char: 1h
+    required: false
+  - reference: ollama_value_tower_docker_network
+    access_level: manager
+    sequence: 11
+    variable_id: tower_docker_network
+    value_char: tower
+    required: false
+  - reference: ollama_value_restart_policy
+    access_level: manager
+    sequence: 12
+    variable_id: docker_container_restart_policy
+    value_char: unless-stopped
+    required: false
+  note: |-
+    Local open-source language models with Ollama, reachable only on the 'tower' Docker network at the Jet's
+    'ollama_internal_url' (http://<ollama_internal_host>:11434). One per server. Put that URL and the model tags into a
+    LiteLLM Gateway ('litellm_ollama_url', 'litellm_ollama_models', or the gateway's config.yaml) - Odoo uses the
+    models through the gateway as 'local-<tag>', e.g. local-qwen3-4b.
+    Models: 'ollama_models' (downloaded by Build and 'Pull models'). Limits: 'ollama_memory_limit', 'ollama_cpus'.
+    CPU-only answers are slow (tens of seconds to minutes with tools); see the template description for sizing.
+  limit_per_server: 1
+  show_in_create_wizard: true
+  server_log_ids:
+  - reference: ollama_log_container
+    name: Ollama logs
+    log_type: command
+    command_id: show_ollama_jet_logs
+    use_sudo: false
+  - reference: ollama_log_models
+    name: Ollama models
+    log_type: command
+    command_id: show_ollama_models
+    use_sudo: false
+  - reference: ollama_log_loaded
+    name: Ollama loaded models
+    log_type: command
+    command_id: show_ollama_loaded_models
+    use_sudo: false
+  action_ids:
+  - reference: ollama_prepare
+    name: Prepare
+    access_level: manager
+    priority: 10
+    note: Create action used by the Launch Jet wizard. Locks the Jet and sets the internal host and URL.
+    state_transit_id: preparing
+    state_to_id: draft
+    state_error_id: draft
+    plan_id: prepare_ollama_jet
+  - reference: ollama_build_draft
+    name: Build
+    access_level: manager
+    priority: 11
+    note: Pulls the image, creates the container and downloads the models in 'ollama_models' (container left stopped).
+    state_from_id: draft
+    state_transit_id: building
+    state_to_id: stopped
+    state_error_id: draft
+    plan_id: build_ollama_jet
+  - reference: ollama_build_removed
+    name: Build
+    access_level: manager
+    priority: 12
+    note: Build after Remove. Same plan as Build from Draft; models already in the volume are reused.
+    state_from_id: removed
+    state_transit_id: building
+    state_to_id: stopped
+    state_error_id: removed
+    plan_id: build_ollama_jet
+  - reference: ollama_start
+    name: Start
+    access_level: user
+    priority: 13
+    note: Starts the container and waits for the API.
+    state_from_id: stopped
+    state_transit_id: starting
+    state_to_id: running
+    state_error_id: stopped
+    plan_id: start_ollama_jet
+  - reference: ollama_stop
+    name: Stop
+    access_level: user
+    priority: 14
+    note: Stops the container. Local models in Odoo fail until it is started again; Claude keeps working.
+    state_from_id: running
+    state_transit_id: stopping
+    state_to_id: stopped
+    state_error_id: running
+    plan_id: stop_jet
+  - reference: ollama_restart
+    name: Restart
+    access_level: user
+    priority: 15
+    note: docker restart - frees the RAM of loaded models. Does not apply changed variables (use Rebuild).
+    state_from_id: running
+    state_transit_id: restarting
+    state_to_id: running
+    state_error_id: stopped
+    plan_id: restart_ollama_jet
+  - reference: ollama_pull_models
+    name: Pull models
+    access_level: manager
+    priority: 16
+    note: Downloads the models in 'ollama_models' into the running container, e.g. after adding a tag. No restart.
+    state_from_id: running
+    state_transit_id: building
+    state_to_id: running
+    state_error_id: running
+    plan_id: pull_ollama_models_plan
+  - reference: ollama_rebuild
+    name: Rebuild
+    access_level: manager
+    priority: 17
+    note: From Stopped. Pulls the image and re-creates the container so changed variables take effect; keeps the models. Start afterwards.
+    state_from_id: stopped
+    state_transit_id: building
+    state_to_id: stopped
+    state_error_id: stopped
+    plan_id: build_ollama_jet
+  - reference: ollama_remove
+    name: Remove
+    access_level: manager
+    priority: 18
+    note: Removes the container; keeps the models volume.
+    state_from_id: stopped
+    state_transit_id: removing
+    state_to_id: removed
+    state_error_id: stopped
+    plan_id: remove_ollama_jet
+  - reference: ollama_remove_draft
+    name: Remove
+    access_level: manager
+    priority: 19
+    note: From Draft (never built, or a failed Build), so such a Jet can reach Removed and be destroyed.
+    state_from_id: draft
+    state_transit_id: removing
+    state_to_id: removed
+    state_error_id: draft
+    plan_id: remove_ollama_jet
+  - reference: ollama_destroy
+    name: Destroy
+    access_level: root
+    priority: 20
+    note: Terminal. Removes the container and deletes the downloaded models, then unlocks the Jet for deletion.
+    state_from_id: removed
+    state_transit_id: destroying
+    state_error_id: removed
+    plan_id: destroy_ollama_jet
+  template_requires_ids:
+  - reference: false
+    template_required_id: docker
+    state_required_id: running

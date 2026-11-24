@@ -1,0 +1,582 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils: https://docutils.sourceforge.io/" />
+<title>AI Connection Discuss Bot</title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 9511 2024-01-13 09:50:07Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+Despite the name, some widely supported CSS2 features are used.
+
+See https://docutils.sourceforge.io/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+.subscript {
+  vertical-align: sub;
+  font-size: smaller }
+
+.superscript {
+  vertical-align: super;
+  font-size: smaller }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+object[type="image/svg+xml"], object[type="application/x-shockwave-flash"] {
+  overflow: hidden;
+}
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title, .code .error {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left, object.align-left, table.align-left {
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right, object.align-right, table.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+img.align-center, .figure.align-center, object.align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+table.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: inherit }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+.align-top    {
+  vertical-align: top }
+
+.align-middle {
+  vertical-align: middle }
+
+.align-bottom {
+  vertical-align: bottom }
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block, pre.math, pre.code {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+pre.code .ln { color: gray; } /* line numbers */
+pre.code, code { background-color: #eeeeee }
+pre.code .comment, code .comment { color: #5C6576 }
+pre.code .keyword, code .keyword { color: #3B0D06; font-weight: bold }
+pre.code .literal.string, code .literal.string { color: #0C5404 }
+pre.code .name.builtin, code .name.builtin { color: #352B84 }
+pre.code .deleted, code .deleted { background-color: #DEB0A1}
+pre.code .inserted, code .inserted { background-color: #A3D289}
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic, pre.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+/* "booktabs" style (no vertical lines) */
+table.docutils.booktabs {
+  border: 0px;
+  border-top: 2px solid;
+  border-bottom: 2px solid;
+  border-collapse: collapse;
+}
+table.docutils.booktabs * {
+  border: 0px;
+}
+table.docutils.booktabs th {
+  border-bottom: thin solid;
+  text-align: left;
+}
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document" id="ai-connection-discuss-bot">
+<h1 class="title">AI Connection Discuss Bot</h1>
+
+<!-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! This file is generated by oca-gen-addon-readme !!
+!! changes will be overwritten.                   !!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! source digest: sha256:7330a7d59b199fe9fdc57786ed86f29078c249705c4b6debb1331c2d6a4d003c
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -->
+<p><a class="reference external image-reference" href="https://odoo-community.org/page/development-status"><img alt="Beta" src="https://img.shields.io/badge/maturity-Beta-yellow.png" /></a> <a class="reference external image-reference" href="http://www.gnu.org/licenses/agpl-3.0-standalone.html"><img alt="License: AGPL-3" src="https://img.shields.io/badge/license-AGPL--3-blue.png" /></a> <a class="reference external image-reference" href="https://github.com/Cetmix-Nordic-Ltd/ai-demo/tree/18.0/ai_connection_discuss_bot"><img alt="Cetmix-Nordic-Ltd/ai-demo" src="https://img.shields.io/badge/github-Cetmix--Nordic--Ltd%2Fai--demo-lightgray.png?logo=github" /></a></p>
+<p>Chat with an AI in Odoo Discuss and in the chatter of any record. The
+module turns an Odoo user into an AI bot that answers through an AI
+Connection of the OCA <tt class="docutils literal">ai_connection</tt> modules, for example Claude or a
+local open-source model behind a LiteLLM gateway
+(<tt class="docutils literal">ai_connection_openai</tt>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">Where</th>
+<th class="head">When the bot answers</th>
+<th class="head">How the answer is
+shown</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>Direct chat with the
+bot</td>
+<td>Every message</td>
+<td>Message in the chat</td>
+</tr>
+<tr><td>Channel or group
+where the bot is a
+member</td>
+<td>When the bot is
+mentioned</td>
+<td>Message in the
+channel</td>
+</tr>
+<tr><td>Chatter of a record
+(customer, order,
+ticket…)</td>
+<td>When the bot is
+mentioned</td>
+<td>Internal note that
+notifies the person
+who asked; nothing
+is sent to external
+followers</td>
+</tr>
+</tbody>
+</table>
+<img alt="Claude answering in Discuss" src="https://raw.githubusercontent.com/Cetmix-Nordic-Ltd/ai-demo/18.0/ai_connection_discuss_bot/static/description/img/discuss_chat.png" />
+<p>Main features:</p>
+<ul class="simple">
+<li>The latest messages of the thread are sent to the AI (20 by default);
+in record chatter e-mails are included too.</li>
+<li>The conversation and its attachments are read with the access rights
+of the person who asked, so the bot never sees anything that person
+cannot see.</li>
+<li>Answers are written in Markdown and shown as formatted text (bold,
+lists, tables, links to records).</li>
+<li>Attachments (images, PDF, text files) are sent to the AI as files or
+as extracted text.</li>
+<li>Tools let the AI read Odoo data with the asker’s access rights.</li>
+<li>The AI can <strong>propose</strong> changes (schedule an activity, log a note).
+Nothing is changed until the person who asked confirms the proposal
+on a review page; the change is then made with that person’s rights.</li>
+<li>Questions are answered in the background by a scheduled action; the
+bot is shown typing meanwhile.</li>
+</ul>
+<p><strong>Table of contents</strong></p>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#installation" id="toc-entry-1">Installation</a></li>
+<li><a class="reference internal" href="#configuration" id="toc-entry-2">Configuration</a></li>
+<li><a class="reference internal" href="#usage" id="toc-entry-3">Usage</a></li>
+<li><a class="reference internal" href="#known-issues-roadmap" id="toc-entry-4">Known issues / Roadmap</a></li>
+<li><a class="reference internal" href="#changelog" id="toc-entry-5">Changelog</a></li>
+<li><a class="reference internal" href="#bug-tracker" id="toc-entry-6">Bug Tracker</a></li>
+<li><a class="reference internal" href="#credits" id="toc-entry-7">Credits</a><ul>
+<li><a class="reference internal" href="#authors" id="toc-entry-8">Authors</a></li>
+<li><a class="reference internal" href="#contributors" id="toc-entry-9">Contributors</a></li>
+<li><a class="reference internal" href="#maintainers" id="toc-entry-10">Maintainers</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="installation">
+<h1><a class="toc-backref" href="#toc-entry-1">Installation</a></h1>
+<p>The module depends on <tt class="docutils literal">ai_tool</tt> and <tt class="docutils literal">ai_connection_openai</tt> from the
+OCA <tt class="docutils literal">ai</tt> repository. <tt class="docutils literal">ai_connection_openai</tt> needs the Python package
+<tt class="docutils literal">openai</tt>.</p>
+<p>The answers are produced by a scheduled action, so Odoo must run with at
+least one cron thread.</p>
+<p>A slow AI (for example a local model on CPU) can take minutes per
+answer. In multi-worker mode Odoo stops a scheduled action after
+<tt class="docutils literal">limit_time_real_cron</tt> seconds (or <tt class="docutils literal">limit_time_real</tt> when that is
+not set, 120 s by default). Raise it, for example to 900, if answers are
+interrupted. A request interrupted three times is marked as failed and
+the person who asked is told.</p>
+</div>
+<div class="section" id="configuration">
+<h1><a class="toc-backref" href="#toc-entry-2">Configuration</a></h1>
+<ol class="arabic simple">
+<li>Create an AI Connection (developer mode, <em>Settings &gt; Technical &gt; AI &gt;
+AI Connection</em>), for example kind <em>OpenAI</em> with the URL and a key of
+a LiteLLM gateway and the model name.</li>
+<li>Open <em>Settings &gt; Users &gt; Claude</em> (the bot user created by the module)
+and fill in the <em>AI Bot</em> tab:<ul>
+<li><strong>AI Bot Connection</strong>: the connection of step 1. The bot answers
+only once this is set.</li>
+<li><strong>AI Bot Tools</strong>: what the bot may read and propose. Empty = no
+tools, the bot sees only the conversation.</li>
+<li><strong>AI Bot History Limit</strong>: how many of the latest messages are
+sent.</li>
+<li><strong>AI Bot Attachments</strong>: <em>Send files</em> (Claude reads images and PDF
+files), <em>Send extracted text only</em> (models without image or PDF
+support) or <em>Do not send attachments</em>; <strong>AI Bot Max Attachment
+Size (MB)</strong> limits the file size.</li>
+<li><strong>AI Bot Instructions</strong>: extra instructions, for example the tone
+of voice or what the bot must not promise.</li>
+</ul>
+</li>
+</ol>
+<img alt="AI Bot settings of the bot user" src="https://raw.githubusercontent.com/Cetmix-Nordic-Ltd/ai-demo/18.0/ai_connection_discuss_bot/static/description/img/bot_settings.png" />
+<p>Any user with an <em>AI Bot Connection</em> acts as a bot, so several bots can
+use different connections (for example Claude and a local model). The
+bot user created by the module has no password and cannot log in.</p>
+<p>The proposal tools (<tt class="docutils literal">propose_activity</tt>, <tt class="docutils literal">propose_note</tt>) are enabled
+for the default bot; remove them from <em>AI Bot Tools</em> to keep a bot
+read-only.</p>
+</div>
+<div class="section" id="usage">
+<h1><a class="toc-backref" href="#toc-entry-3">Usage</a></h1>
+<ul class="simple">
+<li><strong>Discuss</strong>: start a chat with <em>Claude</em> and write. Files can be
+attached to the message.</li>
+<li><strong>Channel</strong>: add the bot to the channel and mention it, for example
+<tt class="docutils literal">&#64;Claude summarise the discussion</tt>.</li>
+<li><strong>Record</strong>: mention the bot in the chatter, for example
+<tt class="docutils literal">&#64;Claude summarise the latest <span class="pre">e-mails</span> of this customer</tt>. <img alt="Answer in the chatter of a record" src="https://raw.githubusercontent.com/Cetmix-Nordic-Ltd/ai-demo/18.0/ai_connection_discuss_bot/static/description/img/record_chatter.png" /></li>
+<li><strong>Changes</strong>: ask for example
+<tt class="docutils literal">&#64;Claude remind Maija to call this customer on Friday</tt>. The answer
+ends with a <em>Review and confirm</em> link; open it and press <em>Confirm</em> or
+<em>Cancel</em>. Opening the link changes nothing, a chat reply such as
+“yes” does not confirm, and a proposal expires after 24 hours.</li>
+</ul>
+<img alt="Review page of a proposal" src="https://raw.githubusercontent.com/Cetmix-Nordic-Ltd/ai-demo/18.0/ai_connection_discuss_bot/static/description/img/review_page.png" />
+<p>Administrators can follow the bot in <em>Settings &gt; Technical &gt; AI</em>:</p>
+<img alt="AI Bot Requests" src="https://raw.githubusercontent.com/Cetmix-Nordic-Ltd/ai-demo/18.0/ai_connection_discuss_bot/static/description/img/bot_requests.png" />
+<ul class="simple">
+<li><strong>AI Bot Requests</strong>: every question, what was sent to the AI, the
+tool calls, proposals, answer, token counts and errors.</li>
+<li><strong>AI Bot Proposals</strong>: the proposals and their state.</li>
+</ul>
+<p>The tools run with the access rights of the person who asked. The
+<tt class="docutils literal">ai_tool</tt> framework itself runs tools as superuser, so only the tools
+of this module (which switch to the asking user) and <tt class="docutils literal">get_date</tt> can be
+given to a bot.</p>
+<p>Privacy: the conversation, attachments and the data the tools read are
+sent to the AI provider of the connection. Make sure this is agreed
+before using the bot in production, or use a local model.</p>
+</div>
+<div class="section" id="known-issues-roadmap">
+<h1><a class="toc-backref" href="#toc-entry-4">Known issues / Roadmap</a></h1>
+<ul class="simple">
+<li>The confirmation of proposals opens a separate page; buttons inside
+Discuss would need an extension of the Discuss message component.</li>
+<li>Two proposal types exist (activity, note); further types could create
+for example project tasks or quotation drafts.</li>
+<li><tt class="docutils literal">ai_connection</tt> does not add the result of a tool that raises an
+exception to the conversation, which breaks the next AI call. The
+tools of this module therefore never raise and return errors as
+results instead.</li>
+<li><tt class="docutils literal">ai_tool</tt> needs read access to <tt class="docutils literal">ir.model</tt>, which regular users do
+not have, so tools are executed as superuser (fixed for 19.0 in
+OCA/ai PR #125).</li>
+</ul>
+</div>
+<div class="section" id="changelog">
+<h1><a class="toc-backref" href="#toc-entry-5">Changelog</a></h1>
+</div>
+<div class="section" id="bug-tracker">
+<h1><a class="toc-backref" href="#toc-entry-6">Bug Tracker</a></h1>
+<p>Bugs are tracked on <a class="reference external" href="https://github.com/Cetmix-Nordic-Ltd/ai-demo/issues">GitHub Issues</a>.
+In case of trouble, please check there if your issue has already been reported.
+If you spotted it first, help us to smash it by providing a detailed and welcomed
+<a class="reference external" href="https://github.com/Cetmix-Nordic-Ltd/ai-demo/issues/new?body=module:%20ai_connection_discuss_bot%0Aversion:%2018.0%0A%0A**Steps%20to%20reproduce**%0A-%20...%0A%0A**Current%20behavior**%0A%0A**Expected%20behavior**">feedback</a>.</p>
+<p>Do not contact contributors directly about support or help with technical issues.</p>
+</div>
+<div class="section" id="credits">
+<h1><a class="toc-backref" href="#toc-entry-7">Credits</a></h1>
+<div class="section" id="authors">
+<h2><a class="toc-backref" href="#toc-entry-8">Authors</a></h2>
+<ul class="simple">
+<li>Cetmix Nordic Ltd</li>
+</ul>
+</div>
+<div class="section" id="contributors">
+<h2><a class="toc-backref" href="#toc-entry-9">Contributors</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="https://cetmix.fi">Cetmix</a>:<ul>
+<li>Jussi Lehto</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="maintainers">
+<h2><a class="toc-backref" href="#toc-entry-10">Maintainers</a></h2>
+<p>This module is part of the <a class="reference external" href="https://github.com/Cetmix-Nordic-Ltd/ai-demo/tree/18.0/ai_connection_discuss_bot">Cetmix-Nordic-Ltd/ai-demo</a> project on GitHub.</p>
+<p>You are welcome to contribute.</p>
+</div>
+</div>
+</div>
+</body>
+</html>

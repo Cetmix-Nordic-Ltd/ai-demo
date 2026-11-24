@@ -2,10 +2,14 @@
 <!-- Copyright 2026 Cetmix Nordic Ltd
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
 <odoo>
-    <record id="ai_discuss_bot_request_list_view" model="ir.ui.view">
+    <record id="ai_discuss_bot_request_view_list" model="ir.ui.view">
         <field name="model">ai.discuss.bot.request</field>
         <field name="arch" type="xml">
-            <list create="0" decoration-danger="state == 'error'" decoration-muted="state == 'pending'">
+            <list
+                create="0"
+                decoration-danger="state == 'error'"
+                decoration-muted="state == 'pending'"
+            >
                 <field name="create_date" string="Asked on" />
                 <field name="bot_user_id" />
                 <field name="author_id" />
@@ -19,7 +23,7 @@
         </field>
     </record>
 
-    <record id="ai_discuss_bot_request_form_view" model="ir.ui.view">
+    <record id="ai_discuss_bot_request_view_form" model="ir.ui.view">
         <field name="model">ai.discuss.bot.request</field>
         <field name="arch" type="xml">
             <form create="0" edit="0">
@@ -40,6 +44,7 @@
                             <field name="prompt_tokens" />
                             <field name="completion_tokens" />
                             <field name="iterations" />
+                            <field name="attempts" />
                         </group>
                     </group>
                     <group string="Error" invisible="not error">
@@ -47,6 +52,15 @@
                     </group>
                     <group string="Answer">
                         <field name="response" nolabel="1" colspan="2" />
+                    </group>
+                    <group string="Proposals" invisible="not action_ids">
+                        <field name="action_ids" nolabel="1" colspan="2">
+                            <list>
+                                <field name="name" />
+                                <field name="state" widget="badge" />
+                                <field name="decided_date" />
+                            </list>
+                        </field>
                     </group>
                     <group string="Tool calls" invisible="not tool_log">
                         <field name="tool_log" nolabel="1" colspan="2" />
@@ -59,18 +73,34 @@
         </field>
     </record>
 
-    <record id="ai_discuss_bot_request_search_view" model="ir.ui.view">
+    <record id="ai_discuss_bot_request_view_search" model="ir.ui.view">
         <field name="model">ai.discuss.bot.request</field>
         <field name="arch" type="xml">
             <search>
                 <field name="bot_user_id" />
                 <field name="author_id" />
                 <field name="res_model" />
-                <filter name="errors" string="Errors" domain="[('state', '=', 'error')]" />
-                <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]" />
+                <filter
+                    name="errors"
+                    string="Errors"
+                    domain="[('state', '=', 'error')]"
+                />
+                <filter
+                    name="pending"
+                    string="Pending"
+                    domain="[('state', '=', 'pending')]"
+                />
                 <group expand="0" string="Group By">
-                    <filter name="group_bot" string="Bot" context="{'group_by': 'bot_user_id'}" />
-                    <filter name="group_state" string="State" context="{'group_by': 'state'}" />
+                    <filter
+                        name="group_bot"
+                        string="Bot"
+                        context="{'group_by': 'bot_user_id'}"
+                    />
+                    <filter
+                        name="group_state"
+                        string="State"
+                        context="{'group_by': 'state'}"
+                    />
                 </group>
             </search>
         </field>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2026 Cetmix Nordic Ltd
+     License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <template id="ai_discuss_bot_action_review_page" name="AI Bot Proposal">
+        <t t-call="web.frontend_layout">
+            <t t-set="no_header" t-value="True" />
+            <t t-set="no_footer" t-value="True" />
+            <div class="container py-5" style="max-width: 760px">
+                <h3 class="mb-3">
+                    <t t-out="action.bot_user_id.name" /> proposes
+                </h3>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title" t-out="action.name" />
+                        <p
+                            class="card-text"
+                            style="white-space: pre-line"
+                            t-if="action.description"
+                            t-out="action.description"
+                        />
+                        <a t-att-href="action._get_record_url()">Open the record</a>
+                    </div>
+                </div>
+                <t t-if="action.state == 'proposed'">
+                    <p
+                    >Nothing has been changed yet. The change is made with your own access rights when you confirm.</p>
+                    <form
+                        t-attf-action="/ai_discuss_bot/action/#{action.id}/decide"
+                        method="post"
+                    >
+                        <input
+                            type="hidden"
+                            name="csrf_token"
+                            t-att-value="request.csrf_token()"
+                        />
+                        <input type="hidden" name="token" t-att-value="token" />
+                        <button
+                            type="submit"
+                            name="decision"
+                            value="confirm"
+                            class="btn btn-primary me-2"
+                        >Confirm</button>
+                        <button
+                            type="submit"
+                            name="decision"
+                            value="cancel"
+                            class="btn btn-secondary"
+                        >Cancel</button>
+                    </form>
+                </t>
+                <t t-else="">
+                    <div
+                        t-attf-class="alert #{'alert-success' if action.state == 'done' else 'alert-warning'}"
+                    >
+                        <t t-if="action.state == 'done'">Done.</t>
+                        <t
+                            t-elif="action.state == 'cancelled'"
+                        >Cancelled. Nothing was changed.</t>
+                        <t
+                            t-elif="action.state == 'expired'"
+                        >This proposal has expired. Ask the bot again if it is still needed.</t>
+                        <t t-elif="action.state == 'failed'">
+                            Could not do it: <t t-out="action.error" />
+                        </t>
+                    </div>
+                </t>
+                <a
+                    class="btn btn-link px-0"
+                    t-att-href="action._get_conversation_url()"
+                >Back to the conversation</a>
+            </div>
+        </t>
+    </template>
+</odoo>

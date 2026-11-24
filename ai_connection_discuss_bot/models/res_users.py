@@ -14,6 +14,9 @@ SAFE_TOOL_DOMAIN = [
     ("model_id.model", "=", SAFE_TOOL_MODEL),
     ("function_name", "in", SAFE_EXTRA_TOOL_FUNCTIONS),
 ]
+# Tools that only propose a change; the change is made when the user who asked
+# confirms it (see ai.discuss.bot.action).
+WRITE_TOOL_FUNCTIONS = ("_ai_bot_propose_activity", "_ai_bot_propose_note")
 
 
 class ResUsers(models.Model):
@@ -41,8 +44,10 @@ class ResUsers(models.Model):
         string="AI Bot Tools",
         domain=SAFE_TOOL_DOMAIN,
         groups="base.group_system",
-        help="Read-only Odoo data tools the bot may use. They run with the "
-        "access rights of the user who asked, never with the bot's own rights.",
+        help="Odoo data tools the bot may use. They run with the access "
+        "rights of the user who asked, never with the bot's own rights. The "
+        "propose_* tools change nothing themselves: the user who asked must "
+        "confirm each proposal.",
     )
     ai_bot_history_limit = fields.Integer(
         string="AI Bot History Limit",
@@ -52,10 +57,39 @@ class ResUsers(models.Model):
         "to the AI with each question.",
     )
 
+    ai_bot_attachment_mode = fields.Selection(
+        selection=[
+            ("files", "Send files (images and PDF as files, others as text)"),
+            ("text", "Send extracted text only"),
+            ("none", "Do not send attachments"),
+        ],
+        string="AI Bot Attachments",
+        default="files",
+        groups="base.group_system",
+        help="How files attached to the conversation are sent to the AI. "
+        "'Send files' suits Claude, which reads images and PDF files. "
+        "'Send extracted text only' suits local models without image or PDF "
+        "support: text is extracted from PDF and text files, images are "
+        "skipped.",
+    )
+    ai_bot_max_attachment_mb = fields.Integer(
+        string="AI Bot Max Attachment Size (MB)",
+        default=10,
+        groups="base.group_system",
+        help="Larger files are not sent to the AI; the AI is told they were "
+        "skipped. Images are limited to 5 MB in any case.",
+    )
+
     def _ai_bot_safe_tools(self):
         """The bot's tools, limited to the safe ones whatever was stored."""
         self.ensure_one()
         return self.sudo().ai_bot_tool_ids.filtered_domain(SAFE_TOOL_DOMAIN).sudo()
+
+    def _ai_bot_write_tools(self):
+        """The bot's tools that propose changes for the user to confirm."""
+        return self._ai_bot_safe_tools().filtered(
+            lambda tool: tool.function_name in WRITE_TOOL_FUNCTIONS
+        )
 
     def _compute_im_status(self):
         """Show AI bots as always online."""

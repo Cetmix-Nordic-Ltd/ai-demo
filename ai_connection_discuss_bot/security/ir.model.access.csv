@@ -1,2 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_ai_discuss_bot_request_system,ai.discuss.bot.request system,model_ai_discuss_bot_request,base.group_system,1,1,1,1
+access_ai_discuss_bot_action_system,ai.discuss.bot.action system,model_ai_discuss_bot_action,base.group_system,1,1,1,1
