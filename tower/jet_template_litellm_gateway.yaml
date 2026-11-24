@@ -1,0 +1,1852 @@
+# LiteLLM Gateway Jet Template for Cetmix Tower.
+# Lets Odoo (OCA ai_connection_openai) talk to Anthropic Claude through an
+# OpenAI-compatible LiteLLM proxy running on the same server as the Odoo Jets.
+cetmix_tower_yaml_version: 1
+manifest:
+  name: LiteLLM Gateway (Docker)
+  summary: OpenAI-compatible LiteLLM proxy for Claude, backed by the shared Postgres Jet
+  description: |
+    Atomized Jet Template: one LiteLLM proxy container per Jet, attached to the
+    'tower' Docker network next to the Odoo Docker 2.0 Jets. Several gateways may run
+    on one server, e.g. one per customer. It stores its keys,
+    spend and logs in its own database and role on the existing shared Postgres Jet
+    (template 'postgres_docker'). Odoo reaches it over the Docker network at
+    http://<litellm_internal_host>:4000.
+
+    Browser access (admin UI at /ui and the API) goes through the Traefik Jet and is
+    published ONLY when 'litellm_admin_allowed_ips' is set: Traefik then answers 403
+    to every client IP outside that list. Empty list = no public route at all.
+
+    Requires the jet templates 'docker', 'postgres_docker' and 'traefik_docker'
+    (Traefik v3) of the "Odoo Docker 2.0" import on the target Tower.
+
+    The shared records this template uses (stock jet commands such as
+    set_jet_root_ownership, the stop_jet plan, the Cloudflare DNS commands, shared
+    variables, keys and tags) are included below as copies of the Odoo Docker 2.0
+    export, under the same references. Import with "If Record Exists: Skip record":
+    records that already exist are left untouched, missing ones are created.
+    'jet_root' must resolve to a per-Jet directory (it is removed by Destroy).
+
+    Secrets to fill in (Cetmix Tower > Settings > Keys and Secrets), letters and
+    digits only - they are placed inside shell quotes, SQL quotes and a URL:
+    - anthropic_api_key     default Anthropic API key (Jets that do not override it)
+    - litellm_master_key    default proxy admin key / UI password, must start with 'sk-'
+    - litellm_salt_key      encrypts stored credentials; never change it later
+    - litellm_db_password   password of the LiteLLM Postgres role
+
+    Customer-specific Anthropic key: create another Secret whose reference starts
+    with 'anthropic_api_key_' (e.g. anthropic_api_key_acme), set its value, and set
+    'litellm_anthropic_key_secret' on that customer's gateway Jet to that reference
+    before Build (or Rebuild an existing one). Build stops if the secret is missing.
+
+    Gateway-specific master key: same pattern - a Secret whose reference starts with
+    'litellm_master_key_' (e.g. litellm_master_key_acme, value starting with 'sk-'),
+    named in 'litellm_master_key_secret' on the Jet. Recommended whenever a customer
+    gets access to the admin UI, so one gateway's admin key opens no other gateway.
+
+    Local models: with an Ollama Jet (jet_template_ollama.yaml) on the server, set
+    'litellm_ollama_url' and 'litellm_ollama_models' on the gateway Jet before
+    Prepare, or add the entries to an existing gateway's config.yaml file record.
+
+    Odoo side: install ai_connection_openai, create an AI Connection of kind
+    OpenAI with URL = the Jet's 'litellm_internal_url', Model = a model_name from
+    config.yaml (claude-sonnet, claude-opus, claude-haiku) and API key = a LiteLLM
+    key.
+records:
+# --------------------------------------------------------------------------
+# Secrets
+# --------------------------------------------------------------------------
+- cetmix_tower_model: key
+  reference: anthropic_api_key
+  name: Anthropic API Key
+  key_type: s
+  note: Default Anthropic API key of the LiteLLM gateways (ANTHROPIC_API_KEY), used by every gateway Jet whose 'litellm_anthropic_key_secret' is left at 'anthropic_api_key'. Set the value manually after import.
+- cetmix_tower_model: key
+  reference: litellm_master_key
+  name: LiteLLM Master Key
+  key_type: s
+  note: Default LiteLLM admin key (LITELLM_MASTER_KEY) of every gateway Jet whose 'litellm_master_key_secret' is left at 'litellm_master_key'. Must start with 'sk-'; use letters and digits only, e.g. 'sk-' + 'openssl rand -hex 32'. It is also the admin UI password.
+- cetmix_tower_model: key
+  reference: litellm_salt_key
+  name: LiteLLM Salt Key
+  key_type: s
+  note: LiteLLM credential encryption key (LITELLM_SALT_KEY). Never change it once the gateway has stored credentials - they become unreadable. Letters and digits only.
+- cetmix_tower_model: key
+  reference: litellm_db_password
+  name: LiteLLM DB Password
+  key_type: s
+  note: Password of the LiteLLM Postgres role. Used in SQL quotes and in DATABASE_URL, so letters and digits only. Re-applied on every Build/Rebuild.
+# Shared keys (copies from the Odoo Docker 2.0 export; skipped when they exist)
+- cetmix_tower_model: key
+  reference: postgres_password
+  name: Postgres Password
+  key_type: s
+  note: Password used to connect to Postgres server
+- cetmix_tower_model: key
+  reference: cloudflare_token
+  name: Cloudflare API Token
+  key_type: s
+  note: false
+- cetmix_tower_model: key
+  reference: cloudflare_zone_id
+  name: Cloudflare Zone ID
+  key_type: s
+  note: false
+# --------------------------------------------------------------------------
+# Tags
+# --------------------------------------------------------------------------
+- cetmix_tower_model: tag
+  reference: litellm
+  name: LiteLLM
+  color: 6
+- cetmix_tower_model: tag
+  reference: ai
+  name: AI
+  color: 2
+# Shared tags (copies from the Odoo Docker 2.0 export; skipped when they exist)
+- cetmix_tower_model: tag
+  reference: docker
+  name: Docker
+  color: 4
+- cetmix_tower_model: tag
+  reference: jets
+  name: Jets
+  color: 4
+- cetmix_tower_model: tag
+  reference: postgres
+  name: Postgres
+  color: 8
+- cetmix_tower_model: tag
+  reference: sql
+  name: SQL
+  color: 3
+- cetmix_tower_model: tag
+  reference: install
+  name: Install
+  color: 6
+- cetmix_tower_model: tag
+  reference: log
+  name: Log
+  color: 4
+- cetmix_tower_model: tag
+  reference: traefik
+  name: Traefik
+  color: 4
+- cetmix_tower_model: tag
+  reference: cloudflare
+  name: Cloudflare
+  color: 2
+- cetmix_tower_model: tag
+  reference: dns
+  name: DNS
+  color: 3
+# --------------------------------------------------------------------------
+# Shared variables (copies from the Odoo Docker 2.0 export; skipped when
+# they exist)
+# --------------------------------------------------------------------------
+- cetmix_tower_model: variable
+  reference: jet_root
+  name: Jet Root
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: false
+- cetmix_tower_model: variable
+  reference: tower_docker_network
+  name: Tower Docker Network
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: '^(?:[a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?|(?:\{\{[^{}]+\}\}|{%\s*(if|else|endif)\b[^%]*?%\}))+$'
+  validation_message: false
+  note: |-
+    Name on a Docker network used by Tower.
+    If left blank no Docker network will be used. In such case containers can be exposed directly base on their configuration.
+- cetmix_tower_model: variable
+  reference: docker_container_restart_policy
+  name: Docker Container Restart Policy
+  access_level: manager
+  option_ids:
+  - reference: docker_container_restart_policy_variable_option_1
+    name: Do not restart
+    access_level: manager
+    value_char: 'no'
+    sequence: 10
+  - reference: docker_container_restart_policy_variable_option_1_2
+    name: Restart if it was running
+    access_level: manager
+    value_char: unless-stopped
+    sequence: 11
+  - reference: docker_container_restart_policy_variable_option_1_3
+    name: Always restart
+    access_level: manager
+    value_char: always
+    sequence: 12
+  variable_type: o
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Docker container restart policy.
+    Tells Docker what to do with the container after the host system was restarted.
+- cetmix_tower_model: variable
+  reference: shared_postgres_name
+  name: Shared Postgres Name
+  tag_ids:
+  - postgres
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: '^(?:[a-z0-9_.-]*\{\{[^{}]+\}\}[a-z0-9_.-]*|{%\s*(if|else|endif)\b[^%]*?%\}|[a-z0-9_.-]+)+$'
+  validation_message: false
+  note: |-
+    Shared Postgres container name.
+    This container is typically used by all instances running on the server.
+- cetmix_tower_model: variable
+  reference: postgres_user
+  name: Postgres User
+  tag_ids:
+  - postgres
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: This user will be used to connect to Postgres server
+- cetmix_tower_model: variable
+  reference: docker_logs_lines
+  name: Docker Logs Lines
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Will show only the specific number of last log lines.
+    docker show logs --tail 50
+- cetmix_tower_model: variable
+  reference: docker_logs_time
+  name: Docker Logs Time
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Will show logs for the last time frame defined by this parameter.
+    docker show logs --from==
+- cetmix_tower_model: variable
+  reference: web_domain
+  name: Web Domain
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: Web domain used to create final URL's
+- cetmix_tower_model: variable
+  reference: no_url
+  name: No URL
+  access_level: manager
+  option_ids:
+  - reference: no_url_variable_option_1
+    name: 'Yes'
+    access_level: manager
+    value_char: 'yes'
+    sequence: 10
+  variable_type: o
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: Helper variable designed to indicate not to add any URL to the jet.
+- cetmix_tower_model: variable
+  reference: dns_provider
+  name: DNS Provider
+  access_level: manager
+  option_ids:
+  - reference: dns_provider_variable_option_1
+    name: Cloudflare
+    access_level: manager
+    value_char: cloudflare
+    sequence: 10
+  variable_type: o
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: false
+# --------------------------------------------------------------------------
+# Shared commands and plan (copies from the Odoo Docker 2.0 export; skipped
+# when they exist)
+# --------------------------------------------------------------------------
+- cetmix_tower_model: command
+  reference: set_jet_as_not_deletable
+  name: Set Jet as not deletable
+  tag_ids:
+  - jets
+  access_level: manager
+  code: |
+    if jet.deletable:
+      jet.write({"deletable": False})
+  allow_parallel_run: false
+  note: false
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: set_jet_as_deletable
+  name: Set Jet as deletable
+  tag_ids:
+  - jets
+  access_level: manager
+  code: |
+    if not jet.deletable:
+      jet.write({
+        "deletable": True
+      })
+  allow_parallel_run: false
+  note: false
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: create_jet_root_directory
+  name: Create Jet Root Directory
+  tag_ids:
+  - install
+  - jets
+  access_level: manager
+  code: mkdir -p {{ jet_root }}
+  variable_ids:
+  - jet_root
+  allow_parallel_run: true
+  note: false
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: set_jet_root_ownership
+  name: Set Jet root ownership
+  tag_ids:
+  - jets
+  access_level: manager
+  code: chown -R {{ tower.server.username }}:{{ tower.server.username }} {{ jet_root
+    }}
+  variable_ids:
+  - jet_root
+  allow_parallel_run: false
+  note: |-
+    Set ownership of the Jet root directory to the Tower SSH user.
+
+    The Jet root is created by 'Create Jet data directory' with sudo, so it belongs to root. On servers where Tower does not log in as root this prevents file_using_template from uploading files directly into the Jet root (the SFTP push runs as the SSH user). Idempotent, and a no-op on servers where Tower logs in as root.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: start_jet_container
+  name: Start jet container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker start {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: Starts the Jet container
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: stop_jet_container
+  name: Stop jet container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker stop {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: false
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: restart_jet_container
+  name: Restart jet container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker restart {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: false
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: remove_jet_container
+  name: Remove Jet Container
+  tag_ids:
+  - docker
+  - jets
+  access_level: manager
+  code: docker rm -f {{ tower.jet.reference }}
+  allow_parallel_run: false
+  note: false
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: delete_jet_files_2
+  name: Delete Jet files
+  tag_ids:
+  - jets
+  access_level: root
+  code: jet.file_ids.unlink()
+  allow_parallel_run: true
+  note: |-
+    ATTENTION!!!
+    Deletes ALL files of the Jet!
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: delete_jet_root_directory
+  name: Delete jet root directory
+  tag_ids:
+  - jets
+  access_level: root
+  code: rm -rf {{ jet_root }}
+  variable_ids:
+  - jet_root
+  allow_parallel_run: false
+  note: Deletes all files that belong to the jet. Use with care!
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: register_cloudflare_dns_record_for_jet
+  name: Register Cloudflare DNS record for Jet
+  tag_ids:
+  - cloudflare
+  - dns
+  - jets
+  access_level: manager
+  code: |-
+    # ----------------
+    # Tower properties
+    # ----------------
+
+    # Ensure your domain matches your DNS Zone!
+    hostname = {{ tower.jet.hostname }}
+    if hostname:
+      cloudflare_zone_id = #!cxtower.secret.cloudflare_zone_id!#
+      cloudflare_token = #!cxtower.secret.cloudflare_token!#
+      request_timeout = 15 # increase in case of unstable network connection
+
+      # ----------------
+      # Request settings
+      # ----------------
+
+
+      url = "https://api.cloudflare.com/client/v4/zones/"+cloudflare_zone_id+"/dns_records"
+      payload = {
+          "comment": "Added with Cetmix Tower",
+          "name": hostname,
+          "proxied": False,
+          "settings": {},
+          "tags": [],
+          "ttl": 3600,
+          "content": {{ tower.server.ipv4 }},
+          "type": "A"
+      }
+      headers = {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer "+cloudflare_token,
+      }
+
+      # Send request to Cloudflare
+      response = requests.post(url, json=payload, headers=headers, timeout=request_timeout)
+
+      # Default Tower success exit code is 0. However requests success code is 200.
+      # Following code convers requests success code into the Tower one
+      if response.status_code == 200:
+        exit_code = 0
+      else:
+        exit_code = response.status_code
+
+      result = {
+          "exit_code": exit_code,
+          "message": response.text,
+      }
+
+    else:
+      # No URL is defined
+      result = {
+          "exit_code": -1,
+          "message": "No URL is defined for the jet",
+      }
+  allow_parallel_run: false
+  note: Register new DNS record on Cloudflare
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: remove_cloudflare_dns_record_from_jet
+  name: Remove Cloudflare DNS record from jet
+  tag_ids:
+  - cloudflare
+  - dns
+  - jets
+  access_level: manager
+  code: |-
+    # ----------------
+    # Tower properties
+    # ----------------
+
+    # Ensure your domain matches your DNS Zone!
+    hostname = {{ tower.jet.hostname }}
+    if hostname:
+      cloudflare_zone_id = #!cxtower.secret.cloudflare_zone_id!#
+      cloudflare_token = #!cxtower.secret.cloudflare_token!#
+      request_timeout = 15 # increase in case of unstable network connection
+
+      # -------------
+      # Get record ID
+      # -------------
+
+      url = "https://api.cloudflare.com/client/v4/zones/"+cloudflare_zone_id+"/dns_records"
+      headers = {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer "+cloudflare_token,
+      }
+
+      # Send request to Cloudflare
+      response = requests.get(url, headers=headers, timeout=request_timeout)
+
+      # Default Tower success exit code is 0. However requests success code is 200.
+      # Following code convers requests success code into the Tower one
+
+      record_id = False
+      exit_code = -1
+      message = "Command failed"
+
+      if response.status_code == 200:
+        records = response.json()["result"]
+        if records:
+          # Find the record ID of the subdomain
+          for record in records:
+            if record.get("name") == hostname:
+                record_id = record.get("id")
+                break
+      else:
+        exit_code = response.status_code
+        message = response.text
+
+      # -----------------
+      # Remove the record
+      # -----------------
+      if record_id:
+          delete_url = "https://api.cloudflare.com/client/v4/zones/"+cloudflare_zone_id+"/dns_records/"+str(record_id)
+
+          # Make DELETE request
+          delete_response = requests.delete(delete_url, headers=headers)
+
+          # Check if deletion was successful
+          if delete_response.status_code == 200:
+              exit_code = 0
+              message = response.text
+          else:
+              exit_code = response.status_code
+              message = response.text
+    else:
+      exit_code = 0
+      message = "Jet doesn't have a valid hostname, DNS removal is skipped"
+
+    result = {
+        "exit_code": exit_code,
+        "message": message,
+    }
+  allow_parallel_run: false
+  note: Delete Cloudflare DNS record
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: plan
+  reference: stop_jet
+  name: Stop Jet
+  tag_ids:
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: stop_jet_plan_line_1
+    sequence: 10
+    command_id: stop_jet_container
+    path: false
+    use_sudo: false
+    condition: false
+    is_make_copy: false
+  note: false
+  on_error_action: e
+  custom_exit_code: 0
+# --------------------------------------------------------------------------
+# Variables
+# --------------------------------------------------------------------------
+- cetmix_tower_model: variable
+  reference: litellm_image
+  name: LiteLLM Image
+  tag_ids:
+  - litellm
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Docker image of the LiteLLM proxy. Default ghcr.io/berriai/litellm:main-stable.
+    Pin a tested release tag for production; a changed value is applied by Rebuild.
+- cetmix_tower_model: variable
+  reference: litellm_db_name
+  name: LiteLLM DB Name
+  tag_ids:
+  - litellm
+  - postgres
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-z_][a-z0-9_]*$
+  validation_message: Lowercase letters, digits and underscores only.
+  note: Database of the LiteLLM gateway on the shared Postgres Jet. Set by Prepare from the Jet reference unless already set on the Jet.
+- cetmix_tower_model: variable
+  reference: litellm_db_user
+  name: LiteLLM DB User
+  tag_ids:
+  - litellm
+  - postgres
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-z_][a-z0-9_]*$
+  validation_message: Lowercase letters, digits and underscores only.
+  note: Postgres role owning the LiteLLM database. Set by Prepare from the Jet reference unless already set on the Jet. Its password is the 'litellm_db_password' secret.
+- cetmix_tower_model: variable
+  reference: litellm_internal_host
+  name: LiteLLM Internal Host
+  tag_ids:
+  - litellm
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+  validation_message: DNS label - lowercase letters, digits and hyphens.
+  note: Docker network alias of the gateway container (no underscores, so HTTP clients accept it). Set by Prepare from the Jet reference unless already set on the Jet. Applied at container create - Rebuild after changing.
+- cetmix_tower_model: variable
+  reference: litellm_internal_url
+  name: LiteLLM Internal URL
+  tag_ids:
+  - litellm
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: Informational. Written by Prepare - the URL Odoo containers on the same Docker network use in the AI Connection 'URL' field.
+- cetmix_tower_model: variable
+  reference: litellm_extra_env
+  name: LiteLLM Extra Env
+  tag_ids:
+  - litellm
+  - docker
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: |-
+    Extra environment variables for the gateway container, one KEY=VALUE per line (e.g. NUM_WORKERS=2, LITELLM_LOG=INFO).
+    No '-e' and no backslashes; each line becomes --env "KEY=VALUE". Do not put secrets here. Applied by Rebuild.
+- cetmix_tower_model: variable
+  reference: litellm_anthropic_key_secret
+  name: LiteLLM Anthropic Key Secret
+  tag_ids:
+  - litellm
+  - ai
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^anthropic_api_key(_[a-z0-9_]+)?$
+  validation_message: Reference of a Secret named anthropic_api_key or anthropic_api_key_<something> (lowercase letters, digits, underscores).
+  note: |-
+    Reference of the Secret (key record) whose value becomes ANTHROPIC_API_KEY in this gateway.
+    Template default 'anthropic_api_key'. For a customer's own Anthropic account create a Secret such as
+    'anthropic_api_key_acme' and set this variable on that customer's Jet. Restricted to anthropic_api_key*
+    references so it cannot point the gateway at another secret. Applied by Build/Rebuild; Build fails if the
+    Secret does not exist or has no value for this server.
+- cetmix_tower_model: variable
+  reference: litellm_master_key_secret
+  name: LiteLLM Master Key Secret
+  tag_ids:
+  - litellm
+  - ai
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^litellm_master_key(_[a-z0-9_]+)?$
+  validation_message: Reference of a Secret named litellm_master_key or litellm_master_key_<something> (lowercase letters, digits, underscores).
+  note: |-
+    Reference of the Secret (key record) whose value becomes LITELLM_MASTER_KEY - the admin key and admin UI password - of this gateway.
+    Template default 'litellm_master_key' (shared by all gateways that keep it). Give each customer gateway its own Secret,
+    e.g. 'litellm_master_key_acme', so one gateway's admin key does not open the others. Restricted to litellm_master_key*
+    references. Applied by Build/Rebuild; Build fails if the Secret is missing or its value does not start with 'sk-'.
+    Changing it on a running gateway: virtual keys already issued keep working (assumption - verify on your LiteLLM version).
+- cetmix_tower_model: variable
+  reference: litellm_admin_allowed_ips
+  name: LiteLLM Admin Allowed IPs
+  tag_ids:
+  - litellm
+  - traefik
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^(?!(.*,)?(0\.0\.0\.0/0|::/0)(,|$))[0-9a-fA-F:.]+(/[0-9]{1,3})?(,[0-9a-fA-F:.]+(/[0-9]{1,3})?)*$
+  validation_message: Comma separated IPs or CIDR ranges without spaces, e.g. 203.0.113.10/32,198.51.100.0/24. 0.0.0.0/0 and ::/0 are not allowed.
+  note: |-
+    Client IPs / CIDR ranges allowed to reach the gateway through Traefik (admin UI at https://<jet hostname>/ui and the API).
+    Comma separated, no spaces, e.g. 203.0.113.10/32,2001:db8::/48. Every other client gets HTTP 403.
+    Leave empty to publish no Traefik route at all (internal Docker network only). Applied at container create - Rebuild after changing.
+- cetmix_tower_model: variable
+  reference: litellm_key_alias
+  name: LiteLLM Key Alias
+  tag_ids:
+  - litellm
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-z0-9][a-z0-9_-]*$
+  validation_message: Lowercase letters, digits, '-' and '_', e.g. odoo-acme-prod.
+  note: Name of the LiteLLM virtual key created by 'Create LiteLLM virtual key', e.g. odoo-acme-prod. Give it as a custom value when running the command.
+- cetmix_tower_model: variable
+  reference: litellm_key_models
+  name: LiteLLM Key Models
+  tag_ids:
+  - litellm
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-z0-9._-]+(,[a-z0-9._-]+)*$
+  validation_message: Comma separated model names from config.yaml, no spaces, e.g. claude-sonnet,claude-haiku
+  note: Models the new virtual key may use, comma separated model_name values from config.yaml (e.g. claude-sonnet,claude-haiku). Empty = all models.
+- cetmix_tower_model: variable
+  reference: litellm_key_max_budget
+  name: LiteLLM Key Max Budget
+  tag_ids:
+  - litellm
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[0-9]+(\.[0-9]+)?$
+  validation_message: A number in USD, e.g. 50
+  note: Spend limit of the new virtual key in USD per 30 days. Empty = no limit.
+- cetmix_tower_model: variable
+  reference: litellm_ollama_url
+  name: LiteLLM Ollama URL
+  tag_ids:
+  - litellm
+  - ai
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^https?://[a-zA-Z0-9.-]+(:[0-9]+)?/?$
+  validation_message: An http(s) URL without path, e.g. http://ollama-1:11434
+  note: |-
+    Base URL of an Ollama server for local models, normally the 'ollama_internal_url' of the Ollama Jet on the same
+    server (http://<ollama_internal_host>:11434). Used together with 'litellm_ollama_models' when Prepare writes
+    config.yaml. Empty = no local models. For an existing gateway edit the Jet's config.yaml file record instead.
+- cetmix_tower_model: variable
+  reference: litellm_ollama_models
+  name: LiteLLM Ollama Models
+  tag_ids:
+  - litellm
+  - ai
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: ^[a-zA-Z0-9._:/-]+(,[a-zA-Z0-9._:/-]+)*$
+  validation_message: Comma separated Ollama model tags without spaces, e.g. qwen3:4b,qwen3:8b
+  note: |-
+    Ollama model tags offered through this gateway (they must be downloaded on the Ollama Jet). Each becomes the model
+    name 'local-<tag with : and / replaced by ->', e.g. qwen3:4b -> local-qwen3-4b, which goes into the Odoo AI
+    Connection 'Model' field. Applied when Prepare writes config.yaml.
+- cetmix_tower_model: variable
+  reference: litellm_db_role_missing
+  name: LiteLLM DB Role Missing
+  tag_ids:
+  - litellm
+  - postgres
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: Run-only flag set by a plan-line action in 'Build LiteLLM Jet' when the Postgres role does not exist. Never set a value for it.
+- cetmix_tower_model: variable
+  reference: litellm_db_missing
+  name: LiteLLM DB Missing
+  tag_ids:
+  - litellm
+  - postgres
+  access_level: manager
+  variable_type: s
+  applied_expression: false
+  validation_pattern: false
+  validation_message: false
+  note: Run-only flag set by a plan-line action in 'Build LiteLLM Jet' when the database does not exist. Never set a value for it.
+# --------------------------------------------------------------------------
+# Config file (model list). No secrets: keys are read from the container env.
+# --------------------------------------------------------------------------
+- cetmix_tower_model: file_template
+  reference: litellm_config
+  name: LiteLLM config.yaml
+  tag_ids:
+  - litellm
+  - ai
+  code: |
+    # LiteLLM proxy configuration. Model names on the left are what Odoo puts in
+    # the AI Connection "Model" field.
+    # Claude 5.5 models reject 'temperature', which ai_connection always sends,
+    # so it is dropped per model.
+    model_list:
+      - model_name: claude-sonnet
+        litellm_params:
+          model: anthropic/claude-sonnet-5-5
+          api_key: os.environ/ANTHROPIC_API_KEY
+          additional_drop_params: ["temperature"]
+      - model_name: claude-opus
+        litellm_params:
+          model: anthropic/claude-opus-5-5
+          api_key: os.environ/ANTHROPIC_API_KEY
+          additional_drop_params: ["temperature"]
+      - model_name: claude-haiku
+        litellm_params:
+          model: anthropic/claude-haiku-5-5
+          api_key: os.environ/ANTHROPIC_API_KEY
+          additional_drop_params: ["temperature"]
+    {% if litellm_ollama_url and litellm_ollama_models %}
+      # Local open-source models on the Ollama Jet (no API key needed)
+    {% for tag in litellm_ollama_models.split(",") %}
+      - model_name: local-{{ tag.strip().replace(":", "-").replace("/", "-") }}
+        litellm_params:
+          model: ollama_chat/{{ tag.strip() }}
+          api_base: {{ litellm_ollama_url }}
+        model_info:
+          supports_function_calling: true
+    {% endfor %}
+    {% endif %}
+
+    litellm_settings:
+      drop_params: true
+  variable_ids:
+  - jet_root
+  - litellm_ollama_url
+  - litellm_ollama_models
+  file_name: config.yaml
+  server_dir: '{{ jet_root }}'
+  note: |-
+    Model list of the LiteLLM gateway, mounted read-only at /app/config.yaml.
+    Contains no secrets - API keys come from the container env (os.environ/...).
+    The file is disconnected from this template on the Jet: edit the Jet's file record, push it, then use 'Restart'.
+  keep_when_deleted: false
+  file_type: text
+  source: tower
+# --------------------------------------------------------------------------
+# Commands
+# --------------------------------------------------------------------------
+- cetmix_tower_model: command
+  reference: set_litellm_jet_configuration_variables
+  name: Set LiteLLM jet configuration variables
+  tag_ids:
+  - litellm
+  - jets
+  access_level: manager
+  code: |
+    exit_code = 0
+    message = ""
+
+    pg_jets = jet.get_dependent_jets_by_template_reference("postgres_docker")
+    if not pg_jets:
+        exit_code = -1
+        message = (
+            "No Postgres Docker Jet is linked to this Jet. Create it with the "
+            "Launch Jet wizard so the 'postgres_docker' dependency is resolved."
+        )
+    else:
+        pg_jet = pg_jets[0]
+        ref = jet.reference.lower()
+        db_ident = "".join([c if c.isalnum() else "_" for c in ref])
+        if db_ident[0].isdigit():
+            db_ident = "l_" + db_ident
+        host = "".join([c if c.isalnum() else "-" for c in ref]).strip("-")
+
+        # Pin the Postgres connection onto the Jet
+        jet.set_variable_value("shared_postgres_name", pg_jet.reference)
+        jet.set_variable_value(
+            "postgres_user", pg_jet.get_variable_value("postgres_user") or "odoo"
+        )
+
+        # Defaults that may be overridden on the Jet before Prepare
+        if not jet.get_variable_value("litellm_db_name", no_fallback=True):
+            jet.set_variable_value("litellm_db_name", db_ident)
+        if not jet.get_variable_value("litellm_db_user", no_fallback=True):
+            jet.set_variable_value("litellm_db_user", db_ident)
+        if not jet.get_variable_value("litellm_internal_host", no_fallback=True):
+            jet.set_variable_value("litellm_internal_host", host)
+
+        url = "http://" + jet.get_variable_value("litellm_internal_host") + ":4000"
+        jet.set_variable_value("litellm_internal_url", url)
+
+        # Public URL (used by Traefik only when litellm_admin_allowed_ips is set).
+        # Same convention as the Odoo Docker 2.0 template.
+        jet_url = jet.url
+        if not jet_url and not {{ no_url }} and {{ web_domain }}:
+            jet_url = "https://jet-" + host + "." + {{ web_domain }}
+            jet.write({"url": jet_url})
+        elif jet_url:
+            sanitized_url = jet_url.lower().strip().replace("_", "-").replace(" ", "")
+            if "://" not in sanitized_url:
+                sanitized_url = "https://" + sanitized_url
+            if jet_url != sanitized_url:
+                jet.write({"url": sanitized_url})
+            jet_url = sanitized_url
+
+        message = (
+            "Postgres Jet: " + pg_jet.reference
+            + "\nDatabase: " + jet.get_variable_value("litellm_db_name")
+            + "\nOdoo AI Connection URL: " + url
+            + "\nPublic URL (IP allowlist only): " + (jet_url or "none")
+        )
+
+    result = {"exit_code": exit_code, "message": message}
+  allow_parallel_run: false
+  note: |-
+    Prepare step. Resolves the linked Postgres Docker Jet and pins shared_postgres_name and postgres_user on this Jet,
+    derives litellm_db_name / litellm_db_user (underscores) and litellm_internal_host (hyphens) from the Jet reference unless already set on the Jet,
+    and writes litellm_internal_url for the Odoo AI Connection.
+    Also composes the public Jet URL (https://jet-<host>.<web_domain>) unless 'no_url' is set or the URL was given explicitly.
+  action: python_code
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: upload_litellm_config
+  name: Upload LiteLLM config
+  tag_ids:
+  - litellm
+  - install
+  access_level: manager
+  code: false
+  allow_parallel_run: false
+  note: Pushes config.yaml into '{{ jet_root }}' and disconnects it from the template so the model list can be edited per Jet. An existing file is kept.
+  action: file_using_template
+  path: false
+  file_template_id: litellm_config
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: true
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: check_litellm_anthropic_key
+  name: Check LiteLLM Anthropic key
+  tag_ids:
+  - litellm
+  - ai
+  access_level: manager
+  code: test "#!cxtower.secret.{{ litellm_anthropic_key_secret }}!#" != "None"
+  allow_parallel_run: true
+  note: |-
+    First Build line. Exits 1 when the Secret named in 'litellm_anthropic_key_secret' does not exist or has no value for
+    this server - Tower would otherwise put the literal text 'None' into ANTHROPIC_API_KEY. Prints nothing; the value is
+    masked in the log. Works because variables are rendered before secret references are resolved.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: check_litellm_master_key
+  name: Check LiteLLM master key
+  tag_ids:
+  - litellm
+  - ai
+  access_level: manager
+  code: |-
+    expr "#!cxtower.secret.{{ litellm_master_key_secret }}!#" : 'sk-'
+  allow_parallel_run: true
+  note: |-
+    Build line. Exits 1 when the Secret named in 'litellm_master_key_secret' does not exist, has no value for this server
+    (Tower would render the text 'None') or its value does not start with 'sk-', which LiteLLM requires.
+    Prints only the match length ('3'); the value itself is masked in the log.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: check_litellm_db_role
+  name: Check LiteLLM DB role
+  tag_ids:
+  - litellm
+  - postgres
+  - sql
+  access_level: manager
+  code: docker exec -e PGPASSWORD=#!cxtower.secret.postgres_password!# {{ shared_postgres_name }} psql -U {{ postgres_user }} -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='{{ litellm_db_user }}'" | grep -q 1
+  allow_parallel_run: true
+  note: Exits 0 when the LiteLLM Postgres role exists, non-zero otherwise. Read-only.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: create_litellm_db_role
+  name: Create LiteLLM DB role
+  tag_ids:
+  - litellm
+  - postgres
+  - sql
+  access_level: manager
+  code: docker exec -e PGPASSWORD=#!cxtower.secret.postgres_password!# {{ shared_postgres_name }} psql -U {{ postgres_user }} -d postgres -c "CREATE ROLE {{ litellm_db_user }} LOGIN"
+  allow_parallel_run: false
+  note: Creates the LiteLLM login role without a password; the next line sets it. Run only when 'Check LiteLLM DB role' reported it missing.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: set_litellm_db_role_password
+  name: Set LiteLLM DB role password
+  tag_ids:
+  - litellm
+  - postgres
+  - sql
+  access_level: manager
+  code: docker exec -e PGPASSWORD=#!cxtower.secret.postgres_password!# {{ shared_postgres_name }} psql -U {{ postgres_user }} -d postgres -c "ALTER ROLE {{ litellm_db_user }} WITH LOGIN PASSWORD '#!cxtower.secret.litellm_db_password!#'"
+  allow_parallel_run: false
+  note: Sets the role password from the 'litellm_db_password' secret. Idempotent; runs on every Build so a rotated secret is applied together with the new DATABASE_URL.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: check_litellm_database
+  name: Check LiteLLM database
+  tag_ids:
+  - litellm
+  - postgres
+  - sql
+  access_level: manager
+  code: docker exec -e PGPASSWORD=#!cxtower.secret.postgres_password!# {{ shared_postgres_name }} psql -U {{ postgres_user }} -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='{{ litellm_db_name }}'" | grep -q 1
+  allow_parallel_run: true
+  note: Exits 0 when the LiteLLM database exists, non-zero otherwise. Read-only.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: create_litellm_database
+  name: Create LiteLLM database
+  tag_ids:
+  - litellm
+  - postgres
+  - sql
+  access_level: manager
+  code: docker exec -e PGPASSWORD=#!cxtower.secret.postgres_password!# {{ shared_postgres_name }} psql -U {{ postgres_user }} -d postgres -c "CREATE DATABASE {{ litellm_db_name }} OWNER {{ litellm_db_user }}"
+  allow_parallel_run: false
+  note: Creates the LiteLLM database owned by the LiteLLM role. LiteLLM creates its tables itself (Prisma migrations) on first start. Run only when 'Check LiteLLM database' reported it missing.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: pull_litellm_image
+  name: Pull LiteLLM image
+  tag_ids:
+  - litellm
+  - docker
+  access_level: manager
+  code: docker pull {{ litellm_image }}
+  allow_parallel_run: false
+  note: Pulls the image named in 'litellm_image' so Build and Rebuild pick up a moved tag.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: create_litellm_container
+  name: Create LiteLLM container
+  tag_ids:
+  - litellm
+  - docker
+  - jets
+  access_level: manager
+  code: |
+    docker create \
+      --name {{ tower.jet.reference }} \
+      --label tower.jet={{ tower.jet.reference }} \
+      --restart {{ docker_container_restart_policy }} \
+      --network={{ tower_docker_network }} \
+      --network-alias {{ litellm_internal_host }} \
+      -v {{ jet_root }}/config.yaml:/app/config.yaml:ro \
+      --env 'LITELLM_MASTER_KEY=#!cxtower.secret.{{ litellm_master_key_secret }}!#' \
+      --env 'LITELLM_SALT_KEY=#!cxtower.secret.litellm_salt_key!#' \
+      --env 'ANTHROPIC_API_KEY=#!cxtower.secret.{{ litellm_anthropic_key_secret }}!#' \
+      --env 'DATABASE_URL=postgresql://{{ litellm_db_user }}:#!cxtower.secret.litellm_db_password!#@{{ shared_postgres_name }}:5432/{{ litellm_db_name }}' \
+      --env LITELLM_MODE=PRODUCTION \
+    {% if litellm_admin_allowed_ips and tower.jet.hostname %}
+      -l "traefik.enable=true" \
+      -l "traefik.docker.network={{ tower_docker_network }}" \
+      -l "traefik.http.middlewares.{{ tower.jet.reference }}-ipallow.ipallowlist.sourcerange={{ litellm_admin_allowed_ips }}" \
+      -l "traefik.http.routers.{{ tower.jet.reference }}-web.rule=Host(\"{{ tower.jet.hostname }}\")" \
+      -l "traefik.http.routers.{{ tower.jet.reference }}-web.entrypoints=websecure" \
+      -l "traefik.http.routers.{{ tower.jet.reference }}-web.tls.certresolver=le" \
+      -l "traefik.http.routers.{{ tower.jet.reference }}-web.middlewares={{ tower.jet.reference }}-ipallow,noindex@file" \
+      -l "traefik.http.routers.{{ tower.jet.reference }}-web.service={{ tower.jet.reference }}-web" \
+      -l "traefik.http.services.{{ tower.jet.reference }}-web.loadbalancer.server.port=4000" \
+    {% endif %}
+    {% if litellm_extra_env %}
+    {% for kv in litellm_extra_env.splitlines() %}
+    {% if kv.strip() %}
+      --env "{{ kv.strip() }}" \
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+      {{ litellm_image }} \
+      --config /app/config.yaml --port 4000
+  allow_parallel_run: false
+  note: |-
+    docker create for the gateway: joins the Tower network under the 'litellm_internal_host' alias, publishes no host port,
+    mounts config.yaml read-only and passes all secrets as --env (none on disk).
+    ANTHROPIC_API_KEY and LITELLM_MASTER_KEY come from the Secrets named in 'litellm_anthropic_key_secret' and
+    'litellm_master_key_secret' (per-Jet overrides of the default keys).
+    Traefik labels are added only when 'litellm_admin_allowed_ips' is set and the Jet has a URL: one HTTPS router for the Jet
+    hostname with an ipAllowList middleware (Traefik v3 syntax) in front of the whole gateway - UI and API alike.
+    Creates the container only - Start runs it. Env and image changes need Rebuild, not Restart.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: wait_for_litellm
+  name: Wait for LiteLLM
+  tag_ids:
+  - litellm
+  - docker
+  access_level: manager
+  code: docker run --rm --network {{ tower_docker_network }} curlimages/curl:8.11.1 -sf --retry 60 --retry-delay 2 --retry-all-errors --max-time 5 http://{{ litellm_internal_host }}:4000/health/readiness
+  allow_parallel_run: true
+  note: Polls /health/readiness (no auth; 503 while the database is unreachable) from a throwaway curl container on the Tower network for about two minutes. Fails the Start/Restart if the gateway never becomes ready - check the 'LiteLLM logs'.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: show_litellm_readiness
+  name: Show LiteLLM readiness
+  tag_ids:
+  - litellm
+  - log
+  access_level: manager
+  code: docker run --rm --network {{ tower_docker_network }} curlimages/curl:8.11.1 -s --max-time 10 http://{{ litellm_internal_host }}:4000/health/readiness
+  allow_parallel_run: true
+  note: Log view. Prints the /health/readiness JSON (proxy status, database connection, LiteLLM version). Read-only.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: show_litellm_jet_logs
+  name: Show LiteLLM jet logs
+  tag_ids:
+  - litellm
+  - docker
+  - log
+  access_level: manager
+  code: docker logs --since={{ docker_logs_time or '30m' }} --tail={{ docker_logs_lines or 300 }} {{ tower.jet.reference }}
+  allow_parallel_run: true
+  note: Log view. docker logs of the gateway container, limited by 'docker_logs_time' and 'docker_logs_lines'. Template-scoped copy of 'show_jet_logs' with allow_parallel_run enabled, so several users can open it at once.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: create_litellm_virtual_key
+  name: Create LiteLLM virtual key
+  tag_ids:
+  - litellm
+  - ai
+  access_level: manager
+  code: |-
+    docker run --rm --network {{ tower_docker_network }} curlimages/curl:8.11.1 -sS --fail-with-body -X POST http://{{ litellm_internal_host }}:4000/key/generate -H 'Authorization: Bearer #!cxtower.secret.{{ litellm_master_key_secret }}!#' -H 'Content-Type: application/json' -d '{"key_alias": "{{ litellm_key_alias }}"{% if litellm_key_models %}, "models": [{% for m in litellm_key_models.split(",") %}"{{ m.strip() }}"{% if not loop.last %}, {% endif %}{% endfor %}]{% endif %}{% if litellm_key_max_budget %}, "max_budget": {{ litellm_key_max_budget }}, "budget_duration": "30d"{% endif %}}'
+  allow_parallel_run: false
+  note: |-
+    Creates a LiteLLM virtual key (POST /key/generate with this gateway's master key) for an Odoo instance, without the admin UI.
+    Run it on the gateway Jet (Jet > Run Command) and give custom values: litellm_key_alias (required), optionally
+    litellm_key_models (e.g. claude-sonnet,claude-haiku) and litellm_key_max_budget (USD per 30 days).
+    The command output is JSON; the new key is in the "key" field (sk-...). Copy it into the Odoo AI Connection.
+    NB: the key is plain text in this command log - anyone who can read Tower command logs can see it.
+    Revoke a key: POST /key/delete with {"keys": ["sk-..."]}.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: drop_litellm_database
+  name: Drop LiteLLM database
+  tag_ids:
+  - litellm
+  - postgres
+  - sql
+  access_level: root
+  code: docker exec -e PGPASSWORD=#!cxtower.secret.postgres_password!# {{ shared_postgres_name }} psql -U {{ postgres_user }} -d postgres -c "DROP DATABASE IF EXISTS {{ litellm_db_name }} WITH (FORCE)"
+  allow_parallel_run: false
+  note: Destroy step. Drops the LiteLLM database, closing open sessions first. Idempotent. All keys, spend and logs are lost.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+- cetmix_tower_model: command
+  reference: drop_litellm_db_role
+  name: Drop LiteLLM DB role
+  tag_ids:
+  - litellm
+  - postgres
+  - sql
+  access_level: root
+  code: docker exec -e PGPASSWORD=#!cxtower.secret.postgres_password!# {{ shared_postgres_name }} psql -U {{ postgres_user }} -d postgres -c "DROP ROLE IF EXISTS {{ litellm_db_user }}"
+  allow_parallel_run: false
+  note: Destroy step, after the database is dropped. Removes the LiteLLM Postgres role. Idempotent.
+  action: ssh_command
+  path: false
+  server_status: false
+  no_split_for_sudo: false
+  if_file_exists: skip
+  disconnect_file: false
+  fly_here: false
+  git_file_name: false
+# --------------------------------------------------------------------------
+# Flight plans
+# --------------------------------------------------------------------------
+- cetmix_tower_model: plan
+  reference: prepare_litellm_jet
+  name: Prepare LiteLLM Jet
+  tag_ids:
+  - litellm
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: prepare_litellm_jet_line_10
+    sequence: 10
+    command_id: set_jet_as_not_deletable
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: prepare_litellm_jet_line_20
+    sequence: 20
+    command_id: set_litellm_jet_configuration_variables
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: prepare_litellm_jet_line_30
+    sequence: 30
+    command_id: create_jet_root_directory
+    path: false
+    use_sudo: true
+    condition: false
+  - reference: prepare_litellm_jet_line_40
+    sequence: 40
+    command_id: set_jet_root_ownership
+    path: false
+    use_sudo: true
+    condition: false
+  - reference: prepare_litellm_jet_line_50
+    sequence: 50
+    command_id: upload_litellm_config
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: prepare_litellm_jet_line_60
+    sequence: 60
+    command_id: register_cloudflare_dns_record_for_jet
+    path: false
+    use_sudo: false
+    condition: '{{ tower.jet.url }} and not {{ no_url }} and {{ dns_provider }} == "cloudflare"'
+  note: |-
+    Create action of the LiteLLM Jet. Locks the Jet against deletion, pins the Postgres connection, the LiteLLM db/host variables
+    and the public Jet URL, creates '{{ jet_root }}' owned by the SSH user and pushes config.yaml there.
+    Registers a Cloudflare DNS record only when 'dns_provider' resolves to 'cloudflare' (set on the server or globally;
+    the template sets no DNS provider). With any other DNS, create the A record of the Jet hostname yourself.
+    The DNS record is created even while 'litellm_admin_allowed_ips' is empty, so browser access can be switched on
+    later with Rebuild alone; without the allowlist Traefik has no route for it.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: build_litellm_jet
+  name: Build LiteLLM Jet
+  tag_ids:
+  - litellm
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: build_litellm_jet_line_05
+    sequence: 5
+    command_id: check_litellm_anthropic_key
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: build_litellm_jet_line_06
+    sequence: 6
+    command_id: check_litellm_master_key
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: build_litellm_jet_line_10
+    sequence: 10
+    command_id: check_litellm_db_role
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: build_litellm_jet_line_10_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+      variable_value_ids:
+      - reference: build_litellm_jet_line_10_role_missing
+        access_level: manager
+        sequence: 10
+        variable_id: litellm_db_role_missing
+        value_char: 'yes'
+        required: false
+    condition: false
+  - reference: build_litellm_jet_line_20
+    sequence: 20
+    command_id: create_litellm_db_role
+    path: false
+    use_sudo: false
+    condition: '{{ litellm_db_role_missing }} == "yes"'
+  - reference: build_litellm_jet_line_30
+    sequence: 30
+    command_id: set_litellm_db_role_password
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: build_litellm_jet_line_40
+    sequence: 40
+    command_id: check_litellm_database
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: build_litellm_jet_line_40_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+      variable_value_ids:
+      - reference: build_litellm_jet_line_40_db_missing
+        access_level: manager
+        sequence: 10
+        variable_id: litellm_db_missing
+        value_char: 'yes'
+        required: false
+    condition: false
+  - reference: build_litellm_jet_line_50
+    sequence: 50
+    command_id: create_litellm_database
+    path: false
+    use_sudo: false
+    condition: '{{ litellm_db_missing }} == "yes"'
+  - reference: build_litellm_jet_line_60
+    sequence: 60
+    command_id: remove_jet_container
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: build_litellm_jet_line_60_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: false
+  - reference: build_litellm_jet_line_70
+    sequence: 70
+    command_id: pull_litellm_image
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: build_litellm_jet_line_80
+    sequence: 80
+    command_id: create_litellm_container
+    path: false
+    use_sudo: false
+    condition: false
+  note: |-
+    Build / Rebuild of the LiteLLM Jet. First checks that the Secrets named in 'litellm_anthropic_key_secret' and
+    'litellm_master_key_secret' resolve (and that the master key starts with 'sk-'). Then ensures the LiteLLM role and database exist on the shared Postgres Jet
+    (check line -> run-only flag -> create line) and (re)applies the role password, then removes any old container,
+    pulls 'litellm_image' and creates a new container. Ends with the container created but not started.
+    Shared by Build from Draft, Build from Removed and Rebuild from Stopped - all three do the same thing.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: start_litellm_jet
+  name: Start LiteLLM Jet
+  tag_ids:
+  - litellm
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: start_litellm_jet_line_10
+    sequence: 10
+    command_id: start_jet_container
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: start_litellm_jet_line_20
+    sequence: 20
+    command_id: wait_for_litellm
+    path: false
+    use_sudo: false
+    condition: false
+  note: Starts the existing gateway container and waits until /health/readiness answers (database migrations done). Does not re-create the container.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: restart_litellm_jet
+  name: Restart LiteLLM Jet
+  tag_ids:
+  - litellm
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: restart_litellm_jet_line_10
+    sequence: 10
+    command_id: restart_jet_container
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: restart_litellm_jet_line_20
+    sequence: 20
+    command_id: wait_for_litellm
+    path: false
+    use_sudo: false
+    condition: false
+  note: docker restart of the gateway, then waits for readiness. Reloads config.yaml (model list); does NOT apply changed env, secrets or image - use Rebuild for those.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: remove_litellm_jet
+  name: Remove LiteLLM Jet
+  tag_ids:
+  - litellm
+  - jets
+  access_level: manager
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: remove_litellm_jet_line_10
+    sequence: 10
+    command_id: remove_jet_container
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: remove_litellm_jet_line_10_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: false
+  note: Removes the gateway container only (a missing container is tolerated). The database, role, config.yaml and Jet root are kept, so Build brings the Jet back with its keys and spend history.
+  on_error_action: e
+  custom_exit_code: 0
+- cetmix_tower_model: plan
+  reference: destroy_litellm_jet
+  name: Destroy LiteLLM Jet
+  tag_ids:
+  - litellm
+  - jets
+  access_level: root
+  allow_parallel_run: false
+  color: 0
+  line_ids:
+  - reference: destroy_litellm_jet_line_10
+    sequence: 10
+    command_id: remove_jet_container
+    path: false
+    use_sudo: false
+    action_ids:
+    - reference: destroy_litellm_jet_line_10_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: false
+  - reference: destroy_litellm_jet_line_20
+    sequence: 20
+    command_id: drop_litellm_database
+    path: false
+    use_sudo: false
+    condition: '{{ litellm_db_name }} and {{ shared_postgres_name }}'
+  - reference: destroy_litellm_jet_line_30
+    sequence: 30
+    command_id: drop_litellm_db_role
+    path: false
+    use_sudo: false
+    condition: '{{ litellm_db_user }} and {{ shared_postgres_name }}'
+  - reference: destroy_litellm_jet_line_40
+    sequence: 40
+    command_id: delete_jet_files_2
+    path: false
+    use_sudo: false
+    condition: false
+  - reference: destroy_litellm_jet_line_50
+    sequence: 50
+    command_id: delete_jet_root_directory
+    path: false
+    use_sudo: true
+    condition: '{{ jet_root }}'
+  - reference: destroy_litellm_jet_line_55
+    sequence: 55
+    command_id: remove_cloudflare_dns_record_from_jet
+    path: false
+    use_sudo: false
+    action_ids:
+    # The stock command exits -1 when the Jet has a URL but no DNS record
+    # (e.g. registration failed in Prepare); that must not block Destroy.
+    - reference: destroy_litellm_jet_line_55_action_10
+      sequence: 10
+      condition: '!='
+      value_char: '0'
+      action: n
+      custom_exit_code: 0
+    condition: '{{ tower.jet.url }} and {{ dns_provider }} == "cloudflare"'
+  - reference: destroy_litellm_jet_line_60
+    sequence: 60
+    command_id: set_jet_as_deletable
+    path: false
+    use_sudo: false
+    condition: false
+  note: |-
+    Terminal cleanup. Removes the container, drops the LiteLLM database and role on the shared Postgres Jet (Postgres must be running),
+    deletes the Jet's file records and '{{ jet_root }}', removes the Cloudflare DNS record (only when 'dns_provider' is
+    'cloudflare'; a failure there does not stop Destroy), and only then unlocks the Jet for deletion.
+    The public LiteLLM image is left on the host - remove it with 'docker image prune' if no longer needed.
+  on_error_action: e
+  custom_exit_code: 0
+# --------------------------------------------------------------------------
+# Jet template
+# --------------------------------------------------------------------------
+- cetmix_tower_model: jet_template
+  reference: litellm_gateway
+  name: LiteLLM Gateway
+  tag_ids:
+  - litellm
+  - ai
+  - docker
+  variable_value_ids:
+  - reference: litellm_gateway_value_litellm_image
+    access_level: manager
+    sequence: 10
+    variable_id: litellm_image
+    value_char: ghcr.io/berriai/litellm:main-stable
+    required: false
+  - reference: litellm_gateway_value_anthropic_key_secret
+    access_level: manager
+    sequence: 10
+    variable_id: litellm_anthropic_key_secret
+    value_char: anthropic_api_key
+    required: false
+  - reference: litellm_gateway_value_master_key_secret
+    access_level: manager
+    sequence: 10
+    variable_id: litellm_master_key_secret
+    value_char: litellm_master_key
+    required: false
+  - reference: litellm_gateway_value_tower_docker_network
+    access_level: manager
+    sequence: 11
+    variable_id: tower_docker_network
+    value_char: tower
+    required: false
+  - reference: litellm_gateway_value_restart_policy
+    access_level: manager
+    sequence: 12
+    variable_id: docker_container_restart_policy
+    value_char: unless-stopped
+    required: false
+  note: |-
+    OpenAI-compatible LiteLLM proxy in front of Anthropic Claude, for Odoo's ai_connection_openai.
+    Any number per server, e.g. one per customer. Requires running Docker, Postgres Docker and Traefik Docker Jets on the
+    same server; each gateway keeps keys, spend and logs in its own database and role on that Postgres Jet.
+    Anthropic key: the Secret named in 'litellm_anthropic_key_secret' (default 'anthropic_api_key'); set it on a Jet to
+    give that customer its own Anthropic account. Admin key: the Secret named in 'litellm_master_key_secret'
+    (default 'litellm_master_key'); give each customer gateway its own when customers use the admin UI. Odoo Jets on the 'tower' network use the Jet's
+    'litellm_internal_url' (http://<litellm_internal_host>:4000).
+    Browser access (https://<jet hostname>/ui, login 'admin' + this gateway's master key) is published through Traefik ONLY for the
+    IPs in 'litellm_admin_allowed_ips'; with the variable empty there is no public route.
+    Model list: the Jet's config.yaml (Restart to reload). Secrets, env, image and IP allowlist: Rebuild to apply.
+  limit_per_server: 0
+  show_in_create_wizard: true
+  server_log_ids:
+  - reference: litellm_gateway_log_container
+    name: LiteLLM logs
+    log_type: command
+    command_id: show_litellm_jet_logs
+    use_sudo: false
+  - reference: litellm_gateway_log_readiness
+    name: LiteLLM readiness
+    log_type: command
+    command_id: show_litellm_readiness
+    use_sudo: false
+  action_ids:
+  - reference: litellm_gateway_prepare
+    name: Prepare
+    access_level: manager
+    priority: 10
+    note: Create action used by the Launch Jet wizard. Locks the Jet, resolves the Postgres Jet, sets the db/host variables and pushes config.yaml.
+    state_transit_id: preparing
+    state_to_id: draft
+    state_error_id: draft
+    plan_id: prepare_litellm_jet
+  - reference: litellm_gateway_build_draft
+    name: Build
+    access_level: manager
+    priority: 11
+    note: Creates the Postgres role and database if missing, pulls the image and creates the container (not started).
+    state_from_id: draft
+    state_transit_id: building
+    state_to_id: stopped
+    state_error_id: draft
+    plan_id: build_litellm_jet
+  - reference: litellm_gateway_build_removed
+    name: Build
+    access_level: manager
+    priority: 12
+    note: Build after Remove. Same plan as Build from Draft; the existing database is reused.
+    state_from_id: removed
+    state_transit_id: building
+    state_to_id: stopped
+    state_error_id: removed
+    plan_id: build_litellm_jet
+  - reference: litellm_gateway_start
+    name: Start
+    access_level: user
+    priority: 13
+    note: Starts the container and waits for /health/readiness.
+    state_from_id: stopped
+    state_transit_id: starting
+    state_to_id: running
+    state_error_id: stopped
+    plan_id: start_litellm_jet
+  - reference: litellm_gateway_stop
+    name: Stop
+    access_level: user
+    priority: 14
+    note: Stops the container. Odoo AI calls fail until it is started again.
+    state_from_id: running
+    state_transit_id: stopping
+    state_to_id: stopped
+    state_error_id: running
+    plan_id: stop_jet
+  - reference: litellm_gateway_restart
+    name: Restart
+    access_level: user
+    priority: 15
+    note: docker restart - reloads config.yaml. Does not apply new env, secrets or image (use Rebuild).
+    state_from_id: running
+    state_transit_id: restarting
+    state_to_id: running
+    state_error_id: stopped
+    plan_id: restart_litellm_jet
+  - reference: litellm_gateway_rebuild
+    name: Rebuild
+    access_level: manager
+    priority: 16
+    note: From Stopped. Re-applies the DB role password, pulls the image and re-creates the container so changed secrets, env and image take effect. Start afterwards.
+    state_from_id: stopped
+    state_transit_id: building
+    state_to_id: stopped
+    state_error_id: stopped
+    plan_id: build_litellm_jet
+  - reference: litellm_gateway_remove
+    name: Remove
+    access_level: manager
+    priority: 17
+    note: Removes the container; keeps database, role and config.yaml.
+    state_from_id: stopped
+    state_transit_id: removing
+    state_to_id: removed
+    state_error_id: stopped
+    plan_id: remove_litellm_jet
+  - reference: litellm_gateway_remove_draft
+    name: Remove
+    access_level: manager
+    priority: 18
+    note: From Draft (never built, or a failed Build), so such a Jet can reach Removed and be destroyed.
+    state_from_id: draft
+    state_transit_id: removing
+    state_to_id: removed
+    state_error_id: draft
+    plan_id: remove_litellm_jet
+  - reference: litellm_gateway_destroy
+    name: Destroy
+    access_level: root
+    priority: 19
+    note: Terminal. Drops the LiteLLM database and role, deletes the Jet files and root directory, then unlocks the Jet for deletion.
+    state_from_id: removed
+    state_transit_id: destroying
+    state_error_id: removed
+    plan_id: destroy_litellm_jet
+  template_requires_ids:
+  - reference: false
+    template_required_id: docker
+    state_required_id: running
+  - reference: false
+    template_required_id: postgres_docker
+    state_required_id: running
+  - reference: false
+    template_required_id: traefik_docker
+    state_required_id: running
